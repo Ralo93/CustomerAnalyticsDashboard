@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "queue-service"
+version = "0.1.0"
+description = "Queue Service for ML Insights System"
+authors = ["Your Name <your.email@example.com>"]
+packages = [{include = "queue_service", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.104.0"
+uvicorn = "^0.23.2"
+httpx = "^0.25.0"
+python-dotenv = "^1.0.0"
+aio-pika = "^9.0.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

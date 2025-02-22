@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "api-gateway"
+version = "0.1.0"
+description = "Api Gateway for ML Insights System"
+authors = ["Your Name <your.email@example.com>"]
+packages = [{include = "api_gateway", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.104.0"
+uvicorn = "^0.23.2"
+httpx = "^0.25.0"
+python-dotenv = "^1.0.0"
+pydantic = "^2.4.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

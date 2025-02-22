@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "worker-service"
+version = "0.1.0"
+description = "Worker Service for ML Insights System"
+authors = ["Your Name <your.email@example.com>"]
+packages = [{include = "worker_service", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.104.0"
+uvicorn = "^0.23.2"
+httpx = "^0.25.0"
+python-dotenv = "^1.0.0"
+aio-pika = "^9.0.5"
+openai = "^1.2.0"  # Add the OpenAI package
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
