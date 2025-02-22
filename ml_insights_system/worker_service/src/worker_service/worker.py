@@ -64,7 +64,6 @@ async def process_sentence(sentence_id: str, connection=None):
             # Simulate some processing time
             processing_start = time.time()
             logger.debug(f"[PROCESS] Starting basic processing for sentence {sentence_id}")
-            await asyncio.sleep(1)
             
             # Example result - replace with actual ML processing result
             processing_result = {
@@ -72,6 +71,7 @@ async def process_sentence(sentence_id: str, connection=None):
                 "word_count": len(text.split()),
                 "processing_status": "completed"
             }
+
             processing_time = time.time() - processing_start
             logger.info(f"[PROCESS] Completed basic processing in {processing_time:.3f}s: {sentence_id}")
             

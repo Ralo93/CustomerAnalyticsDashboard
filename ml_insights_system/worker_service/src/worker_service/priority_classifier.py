@@ -53,13 +53,15 @@ class PriorityClassifier:
                     2. Buying intent - Any indication the customer is interested in purchasing products or services.
                        This includes early-stage buying signals like asking for information, quotations, pricing,
                        product details, or expressing direct interest in purchasing.
-                    
-                    If EITHER churn intent OR buying intent is detected, classify as "high" priority.
+                    3. Changes in business operations or positions, like new staff in customer relations, key account manager or sales representatives.     
+                       This indludes all changes in personell which could affect customers in any way.
+                     
+                    If EITHER churn intent OR buying intent OR changes is detected , classify as "high" priority.
                     If NEITHER type of intent is detected, classify as "normal" priority.
                     
                     Return ONLY a JSON object with the following fields:
                     - priority: "high" or "normal"
-                    - intent_type: "churn", "buying", or "none"
+                    - intent_type: "churn", "buying", "change" or "none"
                     - reasoning: Brief explanation for the classification
                     """},
                     {"role": "user", "content": text}
