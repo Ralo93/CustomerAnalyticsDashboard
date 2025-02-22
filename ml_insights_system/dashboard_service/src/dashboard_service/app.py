@@ -1,28 +1,53 @@
-import threading
 import time
 import streamlit as st
 import pandas as pd
 import altair as alt
 import httpx
 import os
-import asyncio
-import aio_pika
-import json
+import logging
+from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
+
+# Configure logging
+def setup_logging():
+    # Create logs directory if it doesn't exist
+    os.makedirs('logs', exist_ok=True)
+    
+    # Configure logger
+    logger = logging.getLogger('ml_insights_dashboard')
+    logger.setLevel(logging.DEBUG)
+    
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(console_formatter)
+    
+    # File handler with rotation
+    file_handler = RotatingFileHandler(
+        'logs/ml_insights_dashboard.log', 
+        maxBytes=10*1024*1024,  # 10 MB
+        backupCount=5
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(module)s - %(funcName)s - %(message)s')
+    file_handler.setFormatter(file_formatter)
+    
+    # Add handlers to logger
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+    
+    return logger
+
+# Initialize logger
+logger = setup_logging()
 
 # Load environment variables
 load_dotenv()
 
 # Configuration
 DB_SERVICE_URL = os.getenv("DB_SERVICE_URL", "http://localhost:8001")
-RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
-PROCESSED_QUEUE_NAME = os.getenv("PROCESSED_QUEUE_NAME", "processed")
-
-# Create a session state to track updates
-if 'last_updated' not in st.session_state:
-    st.session_state.last_updated = time.time()
-    st.session_state.update_available = False
-    st.session_state.refresh_count = 0
+BRIDGE_API_URL = os.getenv("BRIDGE_API_URL", "http://localhost:8005")
 
 # Page config
 st.set_page_config(
@@ -31,140 +56,151 @@ st.set_page_config(
     layout="wide"
 )
 
+# Setup session state
+if 'last_updated' not in st.session_state:
+    st.session_state.last_updated = time.time()
+    st.session_state.last_message_count = 0
+    st.session_state.bridge_status = "Unknown"
+
 # Header
 st.title("ML Insights Dashboard")
 st.write("Real-time analytics of customer sentence processing")
 
+# Last updated display
 last_updated_time = time.strftime("%H:%M:%S", time.localtime(st.session_state.last_updated))
 st.write(f"Last updated: {last_updated_time}")
 
-# RabbitMQ listener for aio_pika
-async def async_rabbitmq_listener():
-    """Async listener for RabbitMQ using aio_pika"""
+# Function to check bridge service for new messages
+@st.cache_data(ttl=3)  # Cache for 3 seconds
+def check_bridge_service():
     try:
-        # Connect to RabbitMQ
-        connection = await aio_pika.connect_robust(RABBITMQ_URL)
-        
-        # Create channel
-        channel = await connection.channel()
-        
-        # Declare the queue
-        queue = await channel.declare_queue(
-            PROCESSED_QUEUE_NAME,
-            durable=True
-        )
-        
-        print(f"Connected to RabbitMQ, listening on queue: {PROCESSED_QUEUE_NAME}")
-        
-        # Define callback for processing messages
-        async def process_message(message: aio_pika.IncomingMessage):
-            async with message.process():
-                try:
-                    body = message.body.decode()
-                    print(f"Received message: {body}")
-                    
-                    # Set flag for dashboard to refresh
-                    st.session_state.update_available = True
-                    st.session_state.refresh_count += 1
-                    print(f"Set update_available to True, refresh count: {st.session_state.refresh_count}")
-                except Exception as e:
-                    print(f"Error processing message: {str(e)}")
-        
-        # Start consuming
-        await queue.consume(process_message)
-        
-        # Keep the connection alive
-        while True:
-            await asyncio.sleep(1)
+        logger.info("Checking bridge service status")
+        with httpx.Client(timeout=5.0) as client:
+            # Check health
+            health_response = client.get(f"{BRIDGE_API_URL}/health")
             
+            if health_response.status_code != 200:
+                logger.warning(f"Bridge service health check failed. Status code: {health_response.status_code}")
+                return "Unavailable", 0, None
+            
+            health_data = health_response.json()
+            logger.debug(f"Bridge service health data: {health_data}")
+            
+            # Get messages
+            messages_response = client.get(f"{BRIDGE_API_URL}/messages")
+            if messages_response.status_code != 200:
+                logger.warning(f"Failed to fetch messages. Status code: {messages_response.status_code}")
+                return health_data.get("status", "Degraded"), 0, None
+            
+            messages = messages_response.json()
+            logger.info(f"Retrieved {len(messages)} messages from bridge service")
+            
+            return health_data.get("status", "Unknown"), len(messages), messages
     except Exception as e:
-        print(f"Error in async RabbitMQ listener: {str(e)}")
-        # Try to reconnect after a delay
-        await asyncio.sleep(5)
-        asyncio.create_task(async_rabbitmq_listener())
+        logger.error(f"Error checking bridge service: {str(e)}", exc_info=True)
+        return "Error", 0, None
 
-# Thread wrapper for the async listener
-def rabbitmq_listener_thread():
-    """Thread wrapper for the async RabbitMQ listener"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(async_rabbitmq_listener())
-    except Exception as e:
-        print(f"Error in RabbitMQ listener thread: {str(e)}")
-    finally:
-        loop.close()
-
-# Start the RabbitMQ listener thread when the app starts
-if 'listener_thread' not in st.session_state:
-    st.session_state.listener_thread = threading.Thread(target=rabbitmq_listener_thread, daemon=True)
-    st.session_state.listener_thread.start()
-    print("Started RabbitMQ listener thread")
-    
 # Function to fetch data from the database service
-@st.cache_data(ttl=10)  # Cache for 10 seconds
+@st.cache_data(ttl=5)  # Cache for 5 seconds
 def fetch_sentences():
     try:
-        # Since Streamlit runs synchronously, we need to use the synchronous version of httpx
+        logger.info("Fetching sentences from database service")
         with httpx.Client(timeout=10.0) as client:
             response = client.get(f"{DB_SERVICE_URL}/sentences")
             
             if response.status_code != 200:
-                st.error(f"Failed to fetch sentences: {response.status_code} - {response.text}")
+                error_msg = f"Failed to fetch sentences: {response.status_code} - {response.text}"
+                logger.error(error_msg)
+                st.error(error_msg)
                 return pd.DataFrame()
             
             sentences = response.json()
-            # Convert to pandas DataFrame for easier manipulation
             df = pd.DataFrame(sentences)
+            
+            logger.info(f"Successfully fetched {len(df)} sentences")
+            logger.debug(f"Sentence data columns: {df.columns.tolist()}")
+            
             return df
     except Exception as e:
-        st.error(f"Error fetching sentences: {str(e)}")
+        error_msg = f"Error fetching sentences: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        st.error(error_msg)
         return pd.DataFrame()
 
-# Create status indicators in sidebar
+# Logging setup and initial messages
+logger.info("ML Insights Dashboard Starting")
+logger.info(f"Database Service URL: {DB_SERVICE_URL}")
+logger.info(f"Bridge API URL: {BRIDGE_API_URL}")
+
+# Check for new messages from bridge service
+bridge_status, message_count, messages = check_bridge_service()
+
+# Status display in sidebar
 st.sidebar.title("Dashboard Status")
-st.sidebar.write(f"Last Updated: {last_updated_time}")
-st.sidebar.write(f"Refresh Count: {st.session_state.refresh_count}")
-rabbitmq_status = st.sidebar.empty()
-rabbitmq_status.info(f"Connecting to RabbitMQ queue: {PROCESSED_QUEUE_NAME}")
+if bridge_status == "healthy":
+    st.sidebar.success(f"✅ Bridge connected to RabbitMQ")
+    logger.info("Bridge service status: Healthy")
+elif bridge_status == "degraded":
+    st.sidebar.warning(f"⚠️ Bridge service degraded")
+    logger.warning("Bridge service status: Degraded")
+else:
+    st.sidebar.error(f"❌ Bridge service unavailable")
+    logger.error("Bridge service status: Unavailable")
 
-# Configure auto-refresh settings
-auto_refresh = st.sidebar.checkbox("Enable Auto-refresh", value=True)
-refresh_interval = st.sidebar.slider("Refresh interval (seconds)", 5, 60, 10)
+# Also show auto-refresh controls in sidebar
+auto_refresh = st.sidebar.checkbox("Enable auto-refresh", value=True)
+refresh_interval = st.sidebar.slider("Refresh interval (seconds)", 
+                                   min_value=3, max_value=60, value=10)
 
-# Check if we need to update (either timer or RabbitMQ notification)
-current_time = time.time()
+# Check if we need to update
 update_needed = False
+current_time = time.time()
 
-# Check for RabbitMQ update notification
-if st.session_state.update_available:
-    st.sidebar.success("Received update notification!")
-    st.session_state.update_available = False
+# Update if new messages are available
+if message_count > st.session_state.last_message_count:
     update_needed = True
+    st.session_state.last_message_count = message_count
+    
+    # Show notification about new messages
+    if messages and len(messages) > 0:
+        latest = messages[-1]  # Most recent message
+        sentence_id = latest.get('sentence_id', 'unknown')
+        priority = latest.get('priority', 'unknown')
+        st.sidebar.info(f"New sentence processed: {sentence_id[:8]}... with {priority} priority")
+        
+        # Log new message details
+        logger.info(f"New message received - Sentence ID: {sentence_id}, Priority: {priority}")
 
-# Check for time-based refresh
+# Or update based on timer
 time_elapsed = current_time - st.session_state.last_updated
 if auto_refresh and time_elapsed >= refresh_interval:
     update_needed = True
-    
+    logger.debug(f"Auto-refresh triggered. Time elapsed: {time_elapsed}, Interval: {refresh_interval}")
+
 # Apply the update if needed
 if update_needed:
     st.session_state.last_updated = current_time
     fetch_sentences.clear()
+    logger.info("Dashboard data update triggered")
     
 # Fetch data
 sentences_df = fetch_sentences()
 
 # Check if we have data
 if not sentences_df.empty:
+    # Log data summary
+    logger.info("Processing sentence data")
+    
     # Display metrics
     col1, col2, col3 = st.columns(3)
     
     with col1:
+        total_sentences = len(sentences_df)
         st.metric(
             label="Total Processed Sentences", 
-            value=len(sentences_df)
+            value=total_sentences
         )
+        logger.info(f"Total processed sentences: {total_sentences}")
     
     with col2:
         high_priority_count = len(sentences_df[sentences_df['priority'] == 'high']) if 'priority' in sentences_df.columns else 0
@@ -172,6 +208,7 @@ if not sentences_df.empty:
             label="High Priority Sentences", 
             value=high_priority_count
         )
+        logger.info(f"High priority sentences: {high_priority_count}")
     
     with col3:
         normal_priority_count = len(sentences_df[sentences_df['priority'] == 'normal']) if 'priority' in sentences_df.columns else 0
@@ -179,6 +216,7 @@ if not sentences_df.empty:
             label="Normal Priority Sentences", 
             value=normal_priority_count
         )
+        logger.info(f"Normal priority sentences: {normal_priority_count}")
     
     # Create priority histogram
     if 'priority' in sentences_df.columns:
@@ -187,6 +225,11 @@ if not sentences_df.empty:
         # Count by priority
         priority_counts = sentences_df['priority'].value_counts().reset_index()
         priority_counts.columns = ['Priority', 'Count']
+        
+        # Log priority distribution
+        logger.info("Sentence Priority Distribution:")
+        for _, row in priority_counts.iterrows():
+            logger.info(f"  {row['Priority']}: {row['Count']} sentences")
         
         # Create bar chart
         chart = alt.Chart(priority_counts).mark_bar().encode(
@@ -232,6 +275,7 @@ if not sentences_df.empty:
         st.subheader("High Priority Sentences")
         high_priority_df = sentences_df[sentences_df['priority'] == 'high']
         
+        logger.info("Detailed high priority sentences:")
         for _, row in high_priority_df.iterrows():
             with st.expander(f"ID: {row.get('id')} - {row.get('text', '')[:50]}..."):
                 col1, col2 = st.columns(2)
@@ -242,19 +286,32 @@ if not sentences_df.empty:
                 
                 with col2:
                     st.markdown(f"**Priority Reasoning:** {row.get('priority_reasoning', '')}")
+                
+                # Log high priority sentence details
+                logger.info(f"  Sentence ID: {row.get('id')}")
+                logger.info(f"  Intent Type: {row.get('intent_type', 'Unknown')}")
+                logger.info(f"  Sentiment: {row.get('sentiment', 'Unknown')}")
 else:
     st.info("No sentences have been processed yet. Please check that your database service is running and sentences are being processed.")
+    logger.warning("No sentences found in database")
 
 # Add manual refresh button
 if st.button("Refresh Data Now"):
-    st.session_state.refresh_count += 1
+    logger.info("Manual refresh triggered")
+    st.session_state.last_updated = time.time()
+    fetch_sentences.clear()
+    check_bridge_service.clear()
     st.rerun()
 
-# Simple auto-refresh as a fallback
+# Display countdown for next refresh
 if auto_refresh:
-    time_remaining = refresh_interval - int(time_elapsed)
-    st.sidebar.write(f"Next auto-refresh in {time_remaining} seconds")
+    time_remaining = max(0, refresh_interval - int(time_elapsed))
+    st.sidebar.write(f"Next refresh in {time_remaining} seconds")
     
     # Force refresh when timer expires
     if time_elapsed >= refresh_interval:
+        logger.debug("Auto-refresh timer expired. Rerunning.")
         st.rerun()
+
+# Log dashboard session completion
+logger.info("ML Insights Dashboard session completed")

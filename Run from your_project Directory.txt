@@ -1,0 +1,16 @@
+# Run from your_project Directory
+
+DB_SERVICE:
+poetry run python -m src.db_service.service
+
+QUEUE Service:
+poetry run python src/queue_service/service.py
+
+WORKER Service:
+poetry run python src/worker_service/worker.py
+
+API Service:
+poetry run uvicorn src.api_gateway.app:app --host 0.0.0.0 --port 8000 --reload
+
+Dashboard Service:
+poetry run streamlit run src/dashboard_service/app.py

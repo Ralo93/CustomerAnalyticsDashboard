@@ -55,7 +55,7 @@ async def test_process_sentence_integration():
     async with httpx.AsyncClient(timeout=10.0) as client:
         # Generate a unique test sentence to easily identify it
         test_id = str(uuid.uuid4())[:8]
-        test_sentence = f"There is nothing to say about it. Normal stuff x2{test_id}"
+        test_sentence = f"There is nothing to say about it. EXTREMELY IMPORTANT! {test_id}"
         
         # Step 1: Submit the sentence through the API gateway
         print(f"\nSubmitting test sentence: '{test_sentence}'")
