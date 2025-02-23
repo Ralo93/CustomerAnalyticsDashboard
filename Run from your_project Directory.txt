@@ -14,3 +14,6 @@ poetry run uvicorn src.api_gateway.app:app --host 0.0.0.0 --port 8000 --reload
 
 Dashboard Service:
 poetry run streamlit run src/dashboard_service/app.py
+
+Feature:
+poetry run uvicorn src.feature_service.service:app --host 0.0.0.0 --port 8003

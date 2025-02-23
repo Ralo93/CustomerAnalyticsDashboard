@@ -24,22 +24,18 @@ load_dotenv()
 # Service URLs
 DB_SERVICE_URL = os.getenv("DB_SERVICE_URL", "http://localhost:8001")
 QUEUE_SERVICE_URL = os.getenv("QUEUE_SERVICE_URL", "http://localhost:8002")
+FEATURE_SERVICE_URL = os.getenv("FEATURE_SERVICE_URL", "http://localhost:8003")
 
 app = FastAPI(title="ML Insights API Gateway")
 
 class SentenceInput(BaseModel):
+    external_id: str
     text: str
-    priority: Optional[str] = "normal"
-    # The following are optional fields that can be provided during creation
-    intent_type: Optional[str] = None
-    sentiment: Optional[str] = None
-    word_count: Optional[int] = None
-    processing_status: Optional[str] = None
-    priority_reasoning: Optional[str] = None
 
 class ServiceHealthStatus(BaseModel):
     api_gateway: str
     db_service: str
+    feature_service: str
     queue_service: str
     timestamp: str
 
@@ -84,7 +80,7 @@ async def health_check() -> Dict[str, str]:
     return {
         "status": "healthy", 
         "service": "api_gateway",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now().isoformat()
     }
 
 
@@ -97,6 +93,7 @@ async def services_health_check() -> ServiceHealthStatus:
         "api_gateway": "healthy",
         "db_service": "unknown",
         "queue_service": "unknown",
+        "feature_service": "unknown",  # Add this line
         "timestamp": datetime.now().isoformat()
     }
 
@@ -132,53 +129,53 @@ async def services_health_check() -> ServiceHealthStatus:
         health_status["queue_service"] = "unavailable"
         logger.error(f"Failed to connect to queue service: {str(e)}")
 
-    return health_status
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            logger.debug(f"Checking feature service health at {FEATURE_SERVICE_URL}/health")
+            response = await client.get(f"{FEATURE_SERVICE_URL}/health")
+            
+            if response.status_code == 200:
+                health_status["feature_service"] = "healthy"
+                logger.info("Feature service is healthy")
+            else:
+                health_status["feature_service"] = "unhealthy"
+                logger.warning(f"Feature service returned status code {response.status_code}")
+    except httpx.RequestError as e:
+        health_status["feature_service"] = "unavailable"
+        logger.error(f"Failed to connect to feature service: {str(e)}")
 
+    return health_status
 
 @app.post("/sentences", status_code=201)
 async def process_sentence(sentence: SentenceInput, response: Response) -> Dict[str, str]:
     """
     Process a new sentence:
     1. Store in database
-    2. Queue for processing
+    2. Extract features
+    3. Queue for processing
     """
     request_id = str(uuid.uuid4())[:8]
     logger.info(f"[{request_id}] Processing new sentence request: {sentence.text[:30]}...")
     
     try:
-        # 1. Store in database
+        # Parameters for services
+        DB_SERVICE_URL = os.getenv("DB_SERVICE_URL", "http://localhost:8001")
+        FEATURE_SERVICE_URL = os.getenv("FEATURE_SERVICE_URL", "http://localhost:8003")
+        QUEUE_SERVICE_URL = os.getenv("QUEUE_SERVICE_URL", "http://localhost:8002")
+
         async with httpx.AsyncClient(timeout=10.0) as client:
+            # 1. Store sentence in database
             try:
-                start_time = time.time()
-                logger.info(f"[{request_id}] Sending sentence to database service: {DB_SERVICE_URL}/sentences")
-                
-                # Prepare the data to send to database service
                 db_data = {
-                    "text": sentence.text,
-                    "priority": sentence.priority
+                    "external_id": sentence.external_id,
+                    "text": sentence.text
                 }
-                
-                # Add optional fields if provided
-                if sentence.intent_type:
-                    db_data["intent_type"] = sentence.intent_type
-                if sentence.sentiment:
-                    db_data["sentiment"] = sentence.sentiment
-                if sentence.word_count:
-                    db_data["word_count"] = sentence.word_count
-                if sentence.processing_status:
-                    db_data["processing_status"] = sentence.processing_status
-                if sentence.priority_reasoning:
-                    db_data["priority_reasoning"] = sentence.priority_reasoning
                 
                 db_response = await client.post(
                     f"{DB_SERVICE_URL}/sentences", 
                     json=db_data
                 )
                 
-                db_time = time.time() - start_time
-                logger.info(f"[{request_id}] Database service responded in {db_time:.4f}s with status {db_response.status_code}")
-                
-                # Check for errors
                 if db_response.status_code >= 400:
                     logger.error(f"[{request_id}] Database service error: {db_response.status_code} - {db_response.text}")
                     raise HTTPException(
@@ -197,49 +194,64 @@ async def process_sentence(sentence: SentenceInput, response: Response) -> Dict[
                     )
                 
                 logger.info(f"[{request_id}] Sentence stored in database with ID: {sentence_id}")
-                
-                # 2. Queue for processing
+
+                # 2. Extract features
                 try:
-                    start_time = time.time()
-                    logger.info(f"[{request_id}] Queueing sentence for processing: {QUEUE_SERVICE_URL}/queue")
+                    feature_data = {
+                        "sentence_id": sentence_id,
+                        "text": sentence.text
+                    }
                     
-                    queue_response = await client.post(
-                        f"{QUEUE_SERVICE_URL}/queue", 
-                        json={"sentence_id": sentence_id, "priority": sentence.priority}
+                    feature_response = await client.post(
+                        f"{FEATURE_SERVICE_URL}/extract_features", 
+                        json=feature_data
                     )
                     
-                    queue_time = time.time() - start_time
-                    logger.info(f"[{request_id}] Queue service responded in {queue_time:.4f}s with status {queue_response.status_code}")
+                    if feature_response.status_code >= 400:
+                        logger.warning(f"[{request_id}] Feature extraction service error: {feature_response.status_code} - {feature_response.text}")
+                        # Continue processing even if feature extraction fails
+                        response.status_code = 202
+                
+                except httpx.RequestError as exc:
+                    logger.error(f"[{request_id}] Error connecting to feature service: {str(exc)}")
+                    response.status_code = 202
+
+                # 3. Queue for processing
+                try:
+                    queue_response = await client.post(
+                        f"{QUEUE_SERVICE_URL}/queue", 
+                        json={
+                            "sentence_id": sentence_id, 
+                            "external_id": sentence.external_id
+                        }
+                    )
                     
-                    # Check for errors
                     if queue_response.status_code >= 400:
                         logger.error(f"[{request_id}] Queue service error: {queue_response.status_code} - {queue_response.text}")
                         # Even if queueing fails, we still return the sentence ID
-                        # but with a different status and a 202 status code
                         response.status_code = 202
                         return {
                             "id": sentence_id,
                             "status": "stored_only",
                             "message": "Sentence was stored but queueing for processing failed",
-                            "timestamp": datetime.utcnow().isoformat()
+                            "timestamp": datetime.now().isoformat()
                         }
                     
                     logger.info(f"[{request_id}] Sentence queued successfully: {sentence_id}")
                     return {
                         "id": sentence_id,
                         "status": "queued_for_processing",
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": datetime.now().isoformat()
                     }
                     
                 except httpx.RequestError as exc:
                     logger.error(f"[{request_id}] Error connecting to queue service: {str(exc)}")
-                    # Return partial success
                     response.status_code = 202
                     return {
                         "id": sentence_id,
                         "status": "stored_only",
                         "message": "Sentence was stored but queueing for processing failed",
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": datetime.now().isoformat()
                     }
                 
             except httpx.RequestError as exc:
@@ -255,35 +267,56 @@ async def process_sentence(sentence: SentenceInput, response: Response) -> Dict[
     except Exception as e:
         logger.error(f"[{request_id}] Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
-
+    
 
 @app.get("/sentences/{sentence_id}")
 async def get_sentence(sentence_id: str) -> Dict:
-    """Retrieve a sentence by ID from the database service"""
+    """
+    Retrieve a sentence by ID from the database service
+    Also fetch associated features
+    """
     request_id = str(uuid.uuid4())[:8]
     logger.info(f"[{request_id}] Retrieving sentence: {sentence_id}")
     
     try:
-        start_time = time.time()
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(f"{DB_SERVICE_URL}/sentences/{sentence_id}")
+            # 1. Retrieve Sentence
+            start_time = time.time()
+            sentence_response = await client.get(f"{DB_SERVICE_URL}/sentences/{sentence_id}")
             
-            db_time = time.time() - start_time
-            logger.info(f"[{request_id}] Database service responded in {db_time:.4f}s with status {response.status_code}")
+            sentence_time = time.time() - start_time
+            logger.info(f"[{request_id}] Sentence retrieval time: {sentence_time:.4f}s")
             
-            if response.status_code == 404:
+            if sentence_response.status_code == 404:
                 logger.warning(f"[{request_id}] Sentence not found: {sentence_id}")
                 raise HTTPException(status_code=404, detail="Sentence not found")
-            elif response.status_code >= 400:
-                logger.error(f"[{request_id}] Database service error: {response.status_code} - {response.text}")
+            elif sentence_response.status_code >= 400:
+                logger.error(f"[{request_id}] Sentence retrieval error: {sentence_response.status_code}")
                 raise HTTPException(
-                    status_code=response.status_code, 
-                    detail=f"Database service error: {response.text}"
+                    status_code=sentence_response.status_code, 
+                    detail=f"Sentence retrieval error: {sentence_response.text}"
                 )
             
-            result = response.json()
+            sentence_data = sentence_response.json()
+            
+            # 2. Retrieve Features
+            try:
+                start_time = time.time()
+                features_response = await client.get(f"{DB_SERVICE_URL}/features/{sentence_id}")
+                
+                features_time = time.time() - start_time
+                logger.info(f"[{request_id}] Features retrieval time: {features_time:.4f}s")
+                
+                if features_response.status_code == 200:
+                    features_data = features_response.json()
+                    sentence_data['features'] = features_data
+                elif features_response.status_code != 404:
+                    logger.warning(f"[{request_id}] Features retrieval error: {features_response.status_code}")
+            except httpx.RequestError as exc:
+                logger.error(f"[{request_id}] Error retrieving features: {str(exc)}")
+            
             logger.info(f"[{request_id}] Successfully retrieved sentence {sentence_id}")
-            return result
+            return sentence_data
             
     except httpx.RequestError as exc:
         logger.error(f"[{request_id}] Error connecting to database service: {str(exc)}")

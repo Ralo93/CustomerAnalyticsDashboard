@@ -13,6 +13,15 @@ services:
     networks:
       - ml_insights_network
 
+  feature-service:
+    build: ./feature-service
+    ports:
+      - "8003:8003"
+    env_file:
+      - .env
+    depends_on:
+      - db-service
+
   # API Gateway Service
   api_gateway:
     build:

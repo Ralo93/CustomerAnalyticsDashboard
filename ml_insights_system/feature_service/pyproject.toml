@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "feature-extraction-service"
+version = "0.1.0"
+description = "Service for extracting features from text"
+authors = ["Your Name <your.email@example.com>"]
+packages = [{include = "feature_service", from = "src"}]
+
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.109.0"
+uvicorn = "^0.27.0"
+spacy = "^3.7.2"
+sentence-transformers = "^2.2.2"
+httpx = "^0.26.0"
+numpy = "^1.26.0"
+pydantic = "^2.5.0"
+python-dotenv = "^1.0.0"
+
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+

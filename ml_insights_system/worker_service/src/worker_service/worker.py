@@ -8,13 +8,11 @@ import httpx
 from datetime import datetime
 from dotenv import load_dotenv
 import aio_pika
-from priority_classifier import PriorityClassifier
+import openai
 
-# Setup enhanced logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - [%(process)d:%(thread)d] - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S.%f'
+    level=logging.INFO,  # Set to DEBUG to see more information
+    format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
@@ -33,12 +31,187 @@ QUEUE_NAME = os.getenv("QUEUE_NAME", "sentence_processing")
 PROCESSED_QUEUE_NAME = os.getenv("PROCESSED_QUEUE_NAME", "processed")
 DB_SERVICE_URL = os.getenv("DB_SERVICE_URL", "http://localhost:8001")
 
-# Initialize the priority classifier
-priority_classifier = PriorityClassifier()
+
+class SentenceLabelClassifier:
+    """
+    A class to classify various dimensions of a sentence
+    """
+    
+    def __init__(self):
+        self.api_key = os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is not set")
+        
+        self.client = openai.OpenAI(api_key=self.api_key)
+        logger.info("SentenceLabelClassifier initialized with OpenAI API")
+    
+    async def classify_sales_funnel_stage(self, text: str) -> dict:
+        """
+        Classify the sales funnel stage for a given text
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": """
+                    You are a sales funnel stage classifier. Analyze the given text and determine 
+                    the most appropriate sales funnel stage. The stages are:
+                    
+                    1. Awareness: Initial discovery of the product/service
+                    2. Interest: Showing curiosity or initial engagement
+                    3. Consideration: Actively evaluating the offering
+                    4. Intent: Strong indication of potential purchase
+                    5. Evaluation: Comparing with alternatives
+                    6. Purchase: Ready to buy or in purchase process
+                    
+                    Return a JSON with:
+                    - stage: The identified sales funnel stage
+                    - confidence: Confidence score (0-1)
+                    - reasoning: Brief explanation of the classification
+                    """},
+                    {"role": "user", "content": text}
+                ],
+                temperature=0.2,
+                response_format={"type": "json_object"}
+            )
+            
+            result = response.choices[0].message.content
+            return json.loads(result)
+        
+        except Exception as e:
+            logger.error(f"Error in sales funnel stage classification: {str(e)}")
+            return {
+                "stage": "unknown",
+                "confidence": 0.0,
+                "reasoning": f"Classification error: {str(e)}"
+            }
+    
+    async def classify_sentiment(self, text: str) -> dict:
+        """
+        Classify the sentiment of the given text
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": """
+                    You are a sentiment classifier. Analyze the given text and determine 
+                    the sentiment with high precision. The possible sentiments are:
+                    
+                    1. Positive: Expresses satisfaction, excitement, or enthusiasm
+                    2. Neutral: Factual or balanced without strong emotions
+                    3. Negative: Expresses dissatisfaction, frustration, or anger
+                    4. Mixed: Contains conflicting emotional tones
+                    
+                    Return a JSON with:
+                    - sentiment: The identified sentiment
+                    - confidence: Confidence score (0-1)
+                    - reasoning: Brief explanation of the sentiment
+                    """},
+                    {"role": "user", "content": text}
+                ],
+                temperature=0.2,
+                response_format={"type": "json_object"}
+            )
+            
+            result = response.choices[0].message.content
+            return json.loads(result)
+        
+        except Exception as e:
+            logger.error(f"Error in sentiment classification: {str(e)}")
+            return {
+                "sentiment": "unknown",
+                "confidence": 0.0,
+                "reasoning": f"Classification error: {str(e)}"
+            }
+    
+    async def classify_intent(self, text: str) -> dict:
+        """
+        Classify the intent of the given text
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": """
+                    You are an intent classifier. Analyze the given text and determine 
+                    the primary customer intent. The possible intents are:
+                    
+                    1. Support: Seeking help or customer service
+                    2. Purchase: Interested in buying or learning about products
+                    3. Information: Requesting details or clarification
+                    4. Complaint: Expressing dissatisfaction or reporting an issue
+                    5. Feedback: Providing constructive input or suggestions
+                    6. General: Conversational or not clearly categorized
+                    
+                    Return a JSON with:
+                    - intent: The identified intent
+                    - confidence: Confidence score (0-1)
+                    - reasoning: Brief explanation of the intent
+                    """},
+                    {"role": "user", "content": text}
+                ],
+                temperature=0.2,
+                response_format={"type": "json_object"}
+            )
+            
+            result = response.choices[0].message.content
+            return json.loads(result)
+        
+        except Exception as e:
+            logger.error(f"Error in intent classification: {str(e)}")
+            return {
+                "intent": "unknown",
+                "confidence": 0.0,
+                "reasoning": f"Classification error: {str(e)}"
+            }
+    
+    async def classify_business_impact(self, text: str) -> dict:
+        """
+        Classify the potential business impact of the given text
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": """
+                    You are a business impact classifier. Analyze the given text and determine 
+                    the potential business impact. The possible impact levels are:
+                    
+                    1. High: Significant potential for revenue, retention, or strategic change
+                    2. Medium: Moderate potential impact on business operations
+                    3. Low: Minimal immediate business implications
+                    4. Critical: Urgent issues requiring immediate attention
+                    5. Neutral: No clear significant impact
+                    
+                    Return a JSON with:
+                    - impact: The identified business impact level wording, e.g. High, Medium etc.
+                    - confidence: Confidence score (0-1)
+                    - reasoning: Brief explanation of the impact assessment
+                    """},
+                    {"role": "user", "content": text}
+                ],
+                temperature=0.2,
+                response_format={"type": "json_object"}
+            )
+            
+            result = response.choices[0].message.content
+            return json.loads(result)
+        
+        except Exception as e:
+            logger.error(f"Error in business impact classification: {str(e)}")
+            return {
+                "impact": "unknown",
+                "confidence": 0.0,
+                "reasoning": f"Classification error: {str(e)}"
+            }
+
+# Initialize the sentence label classifier
+sentence_label_classifier = SentenceLabelClassifier()
 
 async def process_sentence(sentence_id: str, connection=None):
     """
-    Process a sentence - includes ML processing and priority classification
+    Process a sentence - includes ML processing and comprehensive labeling
     """
     start_time = time.time()
     logger.info(f"[START] Processing sentence: {sentence_id}")
@@ -60,67 +233,62 @@ async def process_sentence(sentence_id: str, connection=None):
             fetch_time = time.time() - fetch_start
             logger.info(f"[FETCH] Retrieved sentence: {sentence_id} in {fetch_time:.3f}s - Text preview: {text[:30]}...")
             
-            # Perform basic processing
-            # Simulate some processing time
-            processing_start = time.time()
-            logger.debug(f"[PROCESS] Starting basic processing for sentence {sentence_id}")
+            # Classify various dimensions
+            classification_start = time.time()
             
-            # Example result - replace with actual ML processing result
-            processing_result = {
-                "sentiment": "positive" if "good" in text.lower() else "negative" if "bad" in text.lower() else "neutral",
-                "word_count": len(text.split()),
-                "processing_status": "completed"
-            }
+            # Run classifications concurrently
+            sales_funnel_task = asyncio.create_task(sentence_label_classifier.classify_sales_funnel_stage(text))
+            sentiment_task = asyncio.create_task(sentence_label_classifier.classify_sentiment(text))
+            intent_task = asyncio.create_task(sentence_label_classifier.classify_intent(text))
+            business_impact_task = asyncio.create_task(sentence_label_classifier.classify_business_impact(text))
+            
+            # Wait for all classifications
+            sales_funnel = await sales_funnel_task
+            sentiment = await sentiment_task
+            intent = await intent_task
+            business_impact = await business_impact_task
 
-            processing_time = time.time() - processing_start
-            logger.info(f"[PROCESS] Completed basic processing in {processing_time:.3f}s: {sentence_id}")
+            classification_time = time.time() - classification_start
+            logger.info(f"[CLASSIFY] Completed classifications in {classification_time:.3f}s")
             
-            # Classify the priority using OpenAI
-            priority_start = time.time()
-            logger.debug(f"[PRIORITY] Starting priority classification for sentence {sentence_id}")
-            priority_result = await priority_classifier.classify_priority(text)
-            priority_time = time.time() - priority_start
-            logger.info(f"[PRIORITY] Priority classification completed in {priority_time:.3f}s for {sentence_id}: {priority_result.get('priority', 'unknown')}")
-            
-            # Combine the results
-            combined_result = {
-                **processing_result,
-                "priority": priority_result.get("priority", "normal"),
-                "intent_type": priority_result.get("intent_type", "none"),
-                "priority_reasoning": priority_result.get("reasoning", "")
+            label_data = {
+                "sentence_id": sentence_id,
+                "sales_funnel_stage": str(sales_funnel.get("stage", "")),
+                "sales_funnel_confidence": float(sales_funnel.get("confidence", 0.0)),
+                "sentiment": str(sentiment.get("sentiment", "")),
+                "sentiment_confidence": float(sentiment.get("confidence", 0.0)),
+                "intent": str(intent.get("intent", "")),
+                "intent_confidence": float(intent.get("confidence", 0.0)),
+                "business_impact": str(business_impact.get("impact", "")),
+                "business_impact_confidence": float(business_impact.get("confidence", 0.0))
             }
             
-            # Update the sentence with processing results
+            # Update the sentence label in the database
             update_start = time.time()
-            logger.debug(f"[UPDATE] Sending results to database for sentence {sentence_id}")
-            update_response = await client.patch(
-                f"{DB_SERVICE_URL}/sentences/{sentence_id}",
-                json=combined_result
+            logger.debug(f"[UPDATE] Sending label results to database for sentence {sentence_id}")
+            update_response = await client.post(
+                f"{DB_SERVICE_URL}/labels",
+                json=label_data
             )
             
             if update_response.status_code not in (200, 201, 204):
-                logger.error(f"[ERROR] Failed to update sentence {sentence_id}: {update_response.status_code} - {update_response.text}")
+                logger.error(f"[ERROR] Failed to create sentence label for {sentence_id}: {update_response.status_code} - {update_response.text}")
                 return False
             
             update_time = time.time() - update_start
             total_time = time.time() - start_time
-            logger.info(f"[UPDATE] Database updated in {update_time:.3f}s for sentence {sentence_id}")
-            logger.info(f"[COMPLETE] Total processing for sentence {sentence_id} took {total_time:.3f}s, priority: {combined_result['priority']}")
+            logger.info(f"[UPDATE] Sentence label created in {update_time:.3f}s for sentence {sentence_id}")
+            logger.info(f"[COMPLETE] Total processing for sentence {sentence_id} took {total_time:.3f}s")
 
-
-            # Publish to processed queue
+            # Publish to processed queue (similar to previous implementation)
             try:
-                # Use the connection passed in, or get the global one if available
                 if connection is None:
-                    # This assumes global_connection is available in this scope
-                    # If not, you'll need to modify this part to get the connection
                     if 'global_connection' in globals():
                         connection = global_connection
                     else:
                         logger.warning(f"[WARN] No RabbitMQ connection available to publish processed notification")
                         return True
                 
-                # Define the processed queue name
                 PROCESSED_QUEUE_NAME = os.getenv("PROCESSED_QUEUE_NAME", "processed")
                 
                 # Create a channel
@@ -129,16 +297,17 @@ async def process_sentence(sentence_id: str, connection=None):
                 # Declare the queue
                 await channel.declare_queue(
                     PROCESSED_QUEUE_NAME,
-                    durable=True  # Queue survives broker restart
+                    durable=True
                 )
                 
                 # Create the message with processed sentence info
                 message_body = json.dumps({
                     "sentence_id": sentence_id,
                     "processed_at": datetime.now().isoformat(),
-                    "priority": combined_result["priority"],
-                    "intent_type": combined_result["intent_type"],
-                    "sentiment": combined_result["sentiment"]
+                    "business_impact": label_data["business_impact"],
+                    "intent": label_data["intent"],
+                    "sentiment": label_data["sentiment"],
+                    "sales_funnel_stage": label_data["sales_funnel_stage"]
                 })
                 
                 # Publish to the queue
@@ -154,7 +323,6 @@ async def process_sentence(sentence_id: str, connection=None):
                 logger.info(f"[RABBITMQ] Published processed notification for sentence {sentence_id} to '{PROCESSED_QUEUE_NAME}' queue")
             except Exception as e:
                 logger.error(f"[ERROR] Failed to publish processed notification: {str(e)}", exc_info=True)
-                # Continue processing, don't fail just because notification failed
             
             return True
             
@@ -166,6 +334,9 @@ async def process_sentence(sentence_id: str, connection=None):
         total_time = time.time() - start_time
         logger.error(f"[ERROR] Error processing sentence {sentence_id} after {total_time:.3f}s: {str(e)}", exc_info=True)
         return False
+
+# Rest of the code remains the same as in the original worker.py
+# (include the on_message, main, and other functions from the original file)
 
 async def on_message(message: aio_pika.IncomingMessage):
     """
@@ -183,7 +354,9 @@ async def on_message(message: aio_pika.IncomingMessage):
             body = message.body.decode()
             data = json.loads(body)
             
-            sentence_id = data.get("sentence_id")
+            # Extract sentence_id, using a more robust approach
+            sentence_id = data.get('sentence_id') or data.get('id')
+            
             if not sentence_id:
                 logger.error(f"[ERROR] Received message {message_id} without sentence_id: {body}")
                 return

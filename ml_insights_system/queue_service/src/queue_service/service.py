@@ -34,7 +34,6 @@ rabbitmq_channel = None
 class TaskPayload(BaseModel):
     """Model for task data"""
     sentence_id: str
-    priority: Optional[str] = "normal"
 
 
 @app.middleware("http")
