@@ -1,5 +1,6 @@
 import base64
 from fastapi import FastAPI, Depends, HTTPException
+from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 import uuid
 import logging
@@ -16,6 +17,8 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
+
+
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Database Service")
@@ -61,6 +64,7 @@ class FeatureCreate(FeatureBase):
     sentence_id: str
     sentence_embedding: Optional[str] = None  # Base64 encoded string
 
+    
     @validator('sentence_embedding')
     def validate_and_encode_embedding(cls, v):
         if v is not None:
@@ -73,6 +77,53 @@ class FeatureCreate(FeatureBase):
             except Exception as e:
                 raise ValueError(f"Invalid base64 encoded embedding: {str(e)}")
         return v
+
+# Response models for analytics endpoints
+class SentimentDistribution(BaseModel):
+    sales_funnel_stage: str
+    positive_count: int
+    negative_count: int
+    neutral_count: int
+    total_count: int
+
+class ImpactScore(BaseModel):
+    sales_funnel_stage: str
+    average_impact: float
+    count: int
+
+class SentimentImpactScore(BaseModel):
+    sentiment: str
+    business_impact: str
+    count: int
+
+class FunnelMetrics(BaseModel):
+    stage: str
+    count: int
+    percentage: float
+
+class IntentDistribution(BaseModel):
+    intent: str
+    count: int
+    percentage: float
+
+class HighImpactSentiment(BaseModel):
+    sales_funnel_stage: str
+    positive_high_impact_count: int
+    total_count: int
+    percentage: float
+
+class StageIntentAlignment(BaseModel):
+    sales_funnel_stage: str
+    intent: str
+    count: int
+    alignment_score: float
+
+class ImpactInformation(BaseModel):
+    information_type: str
+    business_impact: str
+    count: int
+
+
 
 class FeatureUpdate(FeatureBase):
     sentence_embedding: Optional[str] = None  # Base64 encoded string
@@ -113,14 +164,11 @@ class LabelCreate(LabelBase):
 class LabelUpdate(LabelBase):
     pass
 
-
 class LabelResponse(LabelBase):
     id: str
     sentence_id: str
     created_at: datetime
     last_updated: datetime
-
-
 
 
 @app.middleware("http")
@@ -198,6 +246,7 @@ async def update_sentence(sentence_id: str, update_data: SentenceUpdate, db: Ses
     db.refresh(sentence)
     logger.info(f"Sentence {sentence_id} updated successfully")
     return sentence
+
 @app.post("/features", status_code=201, response_model=FeatureResponse)
 async def create_features(features: FeatureCreate, db: Session = Depends(get_db)):
     """Create features for a sentence"""
@@ -245,6 +294,7 @@ async def create_features(features: FeatureCreate, db: Session = Depends(get_db)
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/features/{sentence_id}", response_model=FeatureResponse)
 async def get_features(sentence_id: str, db: Session = Depends(get_db)):
     """Get features for a sentence"""
@@ -260,6 +310,7 @@ async def get_features(sentence_id: str, db: Session = Depends(get_db)):
         features.sentence_embedding = base64.b64encode(features.sentence_embedding).decode()
     
     return features
+
 
 @app.patch("/features/{sentence_id}", response_model=FeatureResponse)
 async def update_features(sentence_id: str, update_data: FeatureUpdate, db: Session = Depends(get_db)):
@@ -345,6 +396,242 @@ async def update_label(sentence_id: str, update_data: LabelUpdate, db: Session =
     db.commit()
     db.refresh(label)
     return label
+
+
+@app.get("/analytics/sentiment-distribution", response_model=List[SentimentDistribution])
+async def get_sentiment_distribution(db: Session = Depends(get_db)):
+    """Get sentiment distribution per sales funnel stage"""
+    results = db.query(
+        models.SentenceLabel.sales_funnel_stage,
+        func.count(case((models.SentenceLabel.sentiment == 'Positive', 1))).label('positive_count'),
+        func.count(case((models.SentenceLabel.sentiment == 'Negative', 1))).label('negative_count'),
+        func.count(case((models.SentenceLabel.sentiment == 'Neutral', 1))).label('neutral_count'),
+        func.count().label('total_count')
+    ).group_by(
+        models.SentenceLabel.sales_funnel_stage
+    ).all()
+    
+    return [
+        SentimentDistribution(
+            sales_funnel_stage=r.sales_funnel_stage,
+            positive_count=r.positive_count,
+            negative_count=r.negative_count,
+            neutral_count=r.neutral_count,
+            total_count=r.total_count
+        ) for r in results
+    ]
+@app.get("/analytics/impact-scores", response_model=List[ImpactScore])
+async def get_impact_scores(db: Session = Depends(get_db)):
+    """Get average impact scores per sales funnel stage"""
+    impact_mapping = {'Low': 1, 'Medium': 2, 'High': 3, 'Neutral': 1.5}
+    
+    # Create a list of tuples for the case statement
+    whens = [(models.SentenceLabel.business_impact == k, v) for k, v in impact_mapping.items()]
+    
+    # Create the case expression with individual arguments
+    results = db.query(
+        models.SentenceLabel.sales_funnel_stage,
+        func.avg(case(*whens)).label('avg_impact'),
+        func.count().label('count')
+    ).group_by(
+        models.SentenceLabel.sales_funnel_stage
+    ).all()
+    
+    return [
+        ImpactScore(
+            sales_funnel_stage=r.sales_funnel_stage,
+            average_impact=float(r.avg_impact) if r.avg_impact is not None else 0.0,
+            count=r.count
+        ) for r in results
+    ]
+
+@app.get("/analytics/sentiment-impact", response_model=List[SentimentImpactScore])
+async def get_sentiment_impact(db: Session = Depends(get_db)):
+    """Get sentiment and business impact correlation"""
+    results = db.query(
+        models.SentenceLabel.sentiment,
+        models.SentenceLabel.business_impact,
+        func.count().label('count')
+    ).group_by(
+        models.SentenceLabel.sentiment,
+        models.SentenceLabel.business_impact
+    ).all()
+    
+    return [
+        SentimentImpactScore(
+            sentiment=r.sentiment,
+            business_impact=r.business_impact,
+            count=r.count
+        ) for r in results
+    ]
+
+@app.get("/analytics/funnel-metrics", response_model=List[FunnelMetrics])
+async def get_funnel_metrics(db: Session = Depends(get_db)):
+    """Get volume metrics for each funnel stage"""
+    total = db.query(func.count()).select_from(models.SentenceLabel).scalar()
+    
+    results = db.query(
+        models.SentenceLabel.sales_funnel_stage,
+        func.count().label('count')
+    ).group_by(
+        models.SentenceLabel.sales_funnel_stage
+    ).all()
+    
+    return [
+        FunnelMetrics(
+            stage=r.sales_funnel_stage,
+            count=r.count,
+            percentage=r.count / total * 100 if total > 0 else 0
+        ) for r in results
+    ]
+
+@app.get("/analytics/intent-distribution", response_model=List[IntentDistribution])
+async def get_intent_distribution(db: Session = Depends(get_db)):
+    """Get distribution of communication intents"""
+    total = db.query(func.count()).select_from(models.SentenceLabel).scalar()
+    
+    results = db.query(
+        models.SentenceLabel.intent,
+        func.count().label('count')
+    ).group_by(
+        models.SentenceLabel.intent
+    ).all()
+    
+    return [
+        IntentDistribution(
+            intent=r.intent,
+            count=r.count,
+            percentage=r.count / total * 100 if total > 0 else 0
+        ) for r in results
+    ]
+
+@app.get("/analytics/high-impact-sentiment", response_model=List[HighImpactSentiment])
+async def get_high_impact_positive_sentiment(db: Session = Depends(get_db)):
+    """Get high impact and positive sentiment distribution per stage"""
+    results = db.query(
+        models.SentenceLabel.sales_funnel_stage,
+        func.count(
+            case(
+                (and_(
+                    models.SentenceLabel.business_impact == 'High',
+                    models.SentenceLabel.sentiment == 'Positive'
+                ), 1)
+            )
+        ).label('positive_high_impact_count'),
+        func.count().label('total_count')
+    ).group_by(
+        models.SentenceLabel.sales_funnel_stage
+    ).all()
+    
+    return [
+        HighImpactSentiment(
+            sales_funnel_stage=r.sales_funnel_stage,
+            positive_high_impact_count=r.positive_high_impact_count,
+            total_count=r.total_count,
+            percentage=r.positive_high_impact_count / r.total_count * 100 if r.total_count > 0 else 0
+        ) for r in results
+    ]
+
+@app.get("/analytics/stage-intent-alignment", response_model=List[StageIntentAlignment])
+async def get_stage_intent_alignment(db: Session = Depends(get_db)):
+    """Get alignment between sales funnel stages and intents"""
+    results = db.query(
+        models.SentenceLabel.sales_funnel_stage,
+        models.SentenceLabel.intent,
+        func.count().label('count')
+    ).group_by(
+        models.SentenceLabel.sales_funnel_stage,
+        models.SentenceLabel.intent
+    ).all()
+    
+    # Calculate alignment score based on expected intent for each stage
+    stage_intent_mapping = {
+        'Awareness': ['Information'],
+        'Interest': ['Feedback', 'Information'],
+        'Consideration': ['Purchase', 'Support'],
+        'Intent': ['Purchase'],
+        'Evaluation': ['Support', 'Complaint'],
+        'Purchase': ['Purchase', 'Feedback']
+    }
+    
+    return [
+        StageIntentAlignment(
+            sales_funnel_stage=r.sales_funnel_stage,
+            intent=r.intent,
+            count=r.count,
+            alignment_score=1.0 if r.intent in stage_intent_mapping.get(r.sales_funnel_stage, []) else 0.0
+        ) for r in results
+    ]
+
+@app.get("/analytics/impact-information", response_model=List[ImpactInformation])
+async def get_impact_information(db: Session = Depends(get_db)):
+    """Get relationship between information type and business impact"""
+    results = db.query(
+        models.SentenceLabel.intent,
+        models.SentenceLabel.business_impact,
+        func.count().label('count')
+    ).filter(
+        models.SentenceLabel.intent.in_(['Information', 'Feedback', 'Support'])
+    ).group_by(
+        models.SentenceLabel.intent,
+        models.SentenceLabel.business_impact
+    ).all()
+    
+    return [
+        ImpactInformation(
+            information_type=r.intent,
+            business_impact=r.business_impact,
+            count=r.count
+        ) for r in results
+    ]
+
+
+# New endpoint to fetch sentences with specific filter criteria
+@app.get("/analytics/sentences-by-filter")
+async def get_sentences_by_filter(
+    sales_funnel_stage: Optional[str] = None,
+    sentiment: Optional[str] = None,
+    business_impact: Optional[str] = None,
+    intent: Optional[str] = None,
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """Fetch sentences matching specific filter criteria"""
+    query = db.query(models.Sentence).join(
+        models.SentenceLabel, models.Sentence.id == models.SentenceLabel.sentence_id
+    )
+    
+    # Apply filters
+    if sales_funnel_stage:
+        query = query.filter(models.SentenceLabel.sales_funnel_stage == sales_funnel_stage)
+    if sentiment:
+        query = query.filter(models.SentenceLabel.sentiment == sentiment)
+    if business_impact:
+        query = query.filter(models.SentenceLabel.business_impact == business_impact)
+    if intent:
+        query = query.filter(models.SentenceLabel.intent == intent)
+    
+    # Limit results and order by newest first
+    sentences = query.order_by(models.Sentence.created_at.desc()).limit(limit).all()
+    
+    # Return sentences with their label information
+    results = []
+    for sentence in sentences:
+        label = db.query(models.SentenceLabel).filter(
+            models.SentenceLabel.sentence_id == sentence.id
+        ).first()
+        
+        results.append({
+            "id": sentence.id,
+            "text": sentence.text,
+            "created_at": sentence.created_at,
+            "sales_funnel_stage": label.sales_funnel_stage if label else None,
+            "sentiment": label.sentiment if label else None,
+            "business_impact": label.business_impact if label else None,
+            "intent": label.intent if label else None
+        })
+    
+    return results
 
 @app.get("/health")
 async def health_check():
