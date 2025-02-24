@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 import redis
 import json
 import numpy as np
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 # Keep existing logging setup
 def setup_logging():
@@ -39,7 +39,7 @@ load_dotenv()
 DB_SERVICE_URL = os.getenv("DB_SERVICE_URL", "http://localhost:8001")
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-CACHE_EXPIRY = int(os.getenv("CACHE_EXPIRY", 60))
+CACHE_EXPIRY = int(os.getenv("CACHE_EXPIRY", 300))  # Extended cache time to 5 minutes
 
 # Set up page configuration
 st.set_page_config(page_title="ML Insights Dashboard", page_icon="📊", layout="wide")
@@ -84,8 +84,6 @@ def verify_redis_caching():
         st.sidebar.error(f"❌ Redis Caching Error: {str(e)}")
         logger.error(f"Redis caching verification failed: {str(e)}")
         return False
-
-# Generic data fetching function with Redis caching
 def fetch_data(endpoint: str, cache_key: str):
     """Fetch data from API with Redis caching"""
     try:
@@ -111,7 +109,7 @@ def fetch_data(endpoint: str, cache_key: str):
                 try:
                     redis_client.setex(
                         cache_key,
-                        CACHE_EXPIRY,
+                        CACHE_EXPIRY,  # Use the global constant
                         json.dumps(df.to_dict(orient='records'))
                     )
                     logger.info(f"Cached {endpoint} data for {CACHE_EXPIRY} seconds")
@@ -124,29 +122,23 @@ def fetch_data(endpoint: str, cache_key: str):
         st.error(f"Error fetching {endpoint} data: {str(e)}")
         return pd.DataFrame()
 
-def fetch_sentences_by_filter(filters: Dict[str, str], limit: int = 10):
-    """Fetch sentences matching specific filter criteria"""
+# New function to fetch all sentences at once
+def fetch_all_sentences():
+    """Fetch all sentences with their label data for client-side filtering"""
     try:
-        # Remove None values from filters
-        filters = {k: v for k, v in filters.items() if v is not None}
-        
-        # Create cache key based on filters
-        cache_key = f"ml_insights:sentences:{hash(frozenset(filters.items()))}"
+        cache_key = "ml_insights:all_sentences"
         
         if redis_client:
             cached_data = redis_client.get(cache_key)
             if cached_data:
-                logger.info(f"Retrieved filtered sentences from Redis cache")
+                logger.info("Retrieved all sentences from Redis cache")
                 return json.loads(cached_data)
         
-        # Build query parameters
-        params = {**filters, 'limit': limit}
-        
-        with httpx.Client(timeout=10.0) as client:
-            response = client.get(f"{DB_SERVICE_URL}/analytics/sentences-by-filter", params=params)
+        with httpx.Client(timeout=20.0) as client:  # Extended timeout for potentially large data
+            response = client.get(f"{DB_SERVICE_URL}/analytics/all-sentences")
             
             if response.status_code != 200:
-                error_msg = f"Failed to fetch sentences: {response.status_code}"
+                error_msg = f"Failed to fetch all sentences: {response.status_code}"
                 logger.error(error_msg)
                 st.error(error_msg)
                 return []
@@ -160,26 +152,46 @@ def fetch_sentences_by_filter(filters: Dict[str, str], limit: int = 10):
                         CACHE_EXPIRY,
                         json.dumps(data)
                     )
-                    logger.info(f"Cached {len(data)} filtered sentences for {CACHE_EXPIRY} seconds")
+                    logger.info(f"Cached {len(data)} sentences for {CACHE_EXPIRY} seconds")
                 except Exception as cache_error:
-                    logger.error(f"Failed to cache filtered sentences: {cache_error}")
+                    logger.error(f"Failed to cache sentences: {cache_error}")
             
             return data
     except Exception as e:
-        logger.error(f"Error fetching sentences: {str(e)}")
-        st.error(f"Error fetching sentences: {str(e)}")
+        logger.error(f"Error fetching all sentences: {str(e)}")
+        st.error(f"Error fetching all sentences: {str(e)}")
         return []
 
-def display_sentence_details(sentences_data):
+# Filter sentences client-side
+def filter_sentences(all_sentences, filters: Dict[str, str], limit: int = 100):
+    """Filter sentences client-side based on criteria"""
+    if not all_sentences:
+        return []
+    
+    filtered = all_sentences
+    
+    # Apply filters
+    for key, value in filters.items():
+        if value and value != "All":
+            filtered = [s for s in filtered if s.get(key) == value]
+    
+    # Sort by created_at (newest first) and limit results
+    filtered = sorted(filtered, key=lambda x: x.get('created_at', ''), reverse=True)
+    return filtered[:limit]
+
+def display_sentence_details(sentences_data, limit=100):
     """Display sentence details in an expandable format"""
     if not sentences_data:
         st.info("No sentences match the selected criteria.")
         return
     
-    st.write(f"### Related Sentences ({len(sentences_data)})")
+    # Only display up to the limit
+    display_sentences = sentences_data[:limit]
     
-    for sentence in sentences_data:
-        with st.expander(f"{sentence['text'][:80]}..."):
+    st.write(f"### Related Sentences ({len(display_sentences)} of {len(sentences_data)} matching)")
+    
+    for sentence in display_sentences:
+        with st.expander(f"{sentence['text'][:1500]}"):
             col1, col2 = st.columns(2)
             
             with col1:
@@ -194,8 +206,8 @@ def display_sentence_details(sentences_data):
                 st.write(f"- **Business Impact:** {sentence['business_impact']}")
                 st.write(f"- **Intent:** {sentence['intent']}")
 
-# Visualization functions with click interaction
-def render_sentiment_distribution(df):
+# Visualization functions with client-side filtering
+def render_sentiment_distribution(df, all_sentences):
     """Visualize sentiment distribution per sales funnel stage with interactive elements"""
     if df.empty:
         st.warning("No sentiment distribution data available")
@@ -253,7 +265,7 @@ def render_sentiment_distribution(df):
             options=["All", "Positive", "Negative", "Neutral"]
         )
     
-    # Fetch sentences based on selections
+    # Use client-side filtering
     filters = {}
     if selected_stage != "All":
         filters['sales_funnel_stage'] = selected_stage
@@ -262,10 +274,10 @@ def render_sentiment_distribution(df):
         filters['sentiment'] = selected_sentiment
     
     if filters:
-        sentences = fetch_sentences_by_filter(filters)
-        display_sentence_details(sentences)
+        filtered_sentences = filter_sentences(all_sentences, filters)
+        display_sentence_details(filtered_sentences)
 
-def render_impact_scores(df):
+def render_impact_scores(df, all_sentences):
     """Visualize average impact scores per stage"""
     if df.empty:
         st.warning("No impact score data available")
@@ -299,10 +311,10 @@ def render_impact_scores(df):
     )
     
     if selected_stage and selected_stage != "All":
-        sentences = fetch_sentences_by_filter({'sales_funnel_stage': selected_stage})
-        display_sentence_details(sentences)
+        filtered_sentences = filter_sentences(all_sentences, {'sales_funnel_stage': selected_stage})
+        display_sentence_details(filtered_sentences)
 
-def render_sentiment_impact(df):
+def render_sentiment_impact(df, all_sentences):
     """Visualize sentiment and business impact correlation"""
     if df.empty:
         st.warning("No sentiment impact data available")
@@ -340,7 +352,7 @@ def render_sentiment_impact(df):
             key="business_impact_select"
         )
     
-    # Fetch sentences based on selections
+    # Use client-side filtering
     filters = {}
     if selected_sentiment != "All":
         filters['sentiment'] = selected_sentiment
@@ -349,23 +361,40 @@ def render_sentiment_impact(df):
         filters['business_impact'] = selected_impact
     
     if filters:
-        sentences = fetch_sentences_by_filter(filters)
-        display_sentence_details(sentences)
+        filtered_sentences = filter_sentences(all_sentences, filters)
+        display_sentence_details(filtered_sentences)
 
-def render_funnel_metrics(df):
-    """Visualize funnel metrics"""
+
+def render_funnel_metrics(df, all_sentences):
+    """Visualize funnel metrics with correct funnel stage order"""
     if df.empty:
         st.warning("No funnel metrics data available")
         return
 
     st.subheader("Sales Funnel Metrics")
     
+    # Define the correct order for funnel stages
+    funnel_order = ["Awareness", "Interest", "Consideration", "Intent", "Evaluation", "Purchase"]
+    
+    # Make a copy to avoid modifying original dataframe
+    ordered_df = df.copy()
+    
+    # Create a categorical type with our custom order
+    ordered_df['stage'] = pd.Categorical(
+        ordered_df['stage'],
+        categories=funnel_order,
+        ordered=True
+    )
+    
+    # Sort by the ordered categorical
+    ordered_df = ordered_df.sort_values('stage')
+    
     # Create funnel chart
-    chart = alt.Chart(df).mark_bar().encode(
+    chart = alt.Chart(ordered_df).mark_bar().encode(
         x=alt.X('count:Q', title='Count'),
         y=alt.Y('stage:N', 
                 title='Funnel Stage',
-                sort=alt.EncodingSortField(field='count', order='descending')),
+                sort=funnel_order),  # Explicitly set sort order
         color=alt.Color('percentage:Q', scale=alt.Scale(scheme='blues')),
         tooltip=[
             'stage',
@@ -383,15 +412,15 @@ def render_funnel_metrics(df):
     # Filter selection
     selected_stage = st.selectbox(
         "Select Stage to View Sentences",
-        options=["All"] + sorted(df['stage'].unique().tolist()),
+        options=["All"] + funnel_order,  # Use the same order for consistency
         key="funnel_stage_select"
     )
     
     if selected_stage and selected_stage != "All":
-        sentences = fetch_sentences_by_filter({'sales_funnel_stage': selected_stage})
-        display_sentence_details(sentences)
+        filtered_sentences = filter_sentences(all_sentences, {'sales_funnel_stage': selected_stage})
+        display_sentence_details(filtered_sentences)
 
-def render_intent_distribution(df):
+def render_intent_distribution(df, all_sentences):
     """Visualize communication intent distribution"""
     if df.empty:
         st.warning("No intent distribution data available")
@@ -424,10 +453,10 @@ def render_intent_distribution(df):
     )
     
     if selected_intent and selected_intent != "All":
-        sentences = fetch_sentences_by_filter({'intent': selected_intent})
-        display_sentence_details(sentences)
+        filtered_sentences = filter_sentences(all_sentences, {'intent': selected_intent})
+        display_sentence_details(filtered_sentences)
 
-def render_high_impact_sentiment(df):
+def render_high_impact_sentiment(df, all_sentences):
     """Visualize high impact and positive sentiment per stage"""
     if df.empty:
         st.warning("No high impact sentiment data available")
@@ -461,15 +490,16 @@ def render_high_impact_sentiment(df):
         key="high_impact_stage_select"
     )
     
+    # Use client-side filtering with multiple criteria
     if selected_stage and selected_stage != "All":
-        sentences = fetch_sentences_by_filter({
+        filtered_sentences = filter_sentences(all_sentences, {
             'sales_funnel_stage': selected_stage,
             'sentiment': 'Positive',
             'business_impact': 'High'
         })
-        display_sentence_details(sentences)
+        display_sentence_details(filtered_sentences)
 
-def render_stage_intent_alignment(df):
+def render_stage_intent_alignment(df, all_sentences):
     """Visualize alignment between sales funnel stages and intents"""
     if df.empty:
         st.warning("No stage-intent alignment data available")
@@ -512,7 +542,7 @@ def render_stage_intent_alignment(df):
             key="alignment_intent_select"
         )
     
-    # Fetch sentences based on selections
+    # Use client-side filtering
     filters = {}
     if selected_stage != "All":
         filters['sales_funnel_stage'] = selected_stage
@@ -521,10 +551,10 @@ def render_stage_intent_alignment(df):
         filters['intent'] = selected_intent
     
     if filters:
-        sentences = fetch_sentences_by_filter(filters)
-        display_sentence_details(sentences)
+        filtered_sentences = filter_sentences(all_sentences, filters)
+        display_sentence_details(filtered_sentences)
 
-def render_impact_information(df):
+def render_impact_information(df, all_sentences):
     """Visualize relationship between information type and business impact"""
     if df.empty:
         st.warning("No impact-information data available")
@@ -562,7 +592,7 @@ def render_impact_information(df):
             key="info_impact_select"
         )
     
-    # Fetch sentences based on selections
+    # Use client-side filtering
     filters = {}
     if selected_info_type != "All":
         filters['intent'] = selected_info_type
@@ -571,14 +601,26 @@ def render_impact_information(df):
         filters['business_impact'] = selected_impact
     
     if filters:
-        sentences = fetch_sentences_by_filter(filters)
-        display_sentence_details(sentences)
-
+        filtered_sentences = filter_sentences(all_sentences, filters)
+        display_sentence_details(filtered_sentences)
 def main():
     # Initialize session state
-    if 'refresh_count' not in st.session_state:
-        st.session_state.refresh_count = 0
-
+    if 'data' not in st.session_state:
+        st.session_state.data = {
+            'all_sentences': None,
+            'sentiment_dist': None,
+            'impact_scores': None,
+            'sentiment_impact': None,
+            'funnel_metrics': None,
+            'intent_dist': None,
+            'high_impact': None,
+            'alignment': None,
+            'info_impact': None,
+            'refresh_count': 0,
+            'last_refresh_time': time.time(),
+            'data_loaded': False
+        }
+    
     # Verify Redis caching
     redis_verified = verify_redis_caching()
 
@@ -587,15 +629,74 @@ def main():
     auto_refresh = st.sidebar.checkbox("Enable auto-refresh", value=False)
     refresh_interval = st.sidebar.slider(
         "Refresh interval (seconds)",
-        min_value=5,
-        max_value=60,
-        value=15
+        min_value=60,
+        max_value=3600,
+        value=300
     )
 
     # Main content
     st.title("Customer Interaction Analytics Dashboard")
-    st.write("Real-time analytics of customer interactions with interactive data exploration")
-
+    st.write("Interactive analytics with client-side filtering for fast exploration")
+    
+    # Check if data needs to be loaded/refreshed
+    current_time = time.time()
+    time_since_refresh = current_time - st.session_state.data['last_refresh_time']
+    force_refresh = st.sidebar.button("Refresh Data Now")
+    
+    needs_refresh = (
+        st.session_state.data['all_sentences'] is None or
+        force_refresh or
+        (auto_refresh and time_since_refresh > refresh_interval)
+    )
+    
+    if needs_refresh:
+        # Increment refresh counter
+        st.session_state.data['refresh_count'] += 1
+        
+        # Loading UI elements
+        init_placeholder = st.empty()
+        with init_placeholder.container():
+            st.info("⏳ Loading or refreshing dashboard data...")
+            progress_bar = st.progress(0)
+        
+        # Load all data
+        with st.spinner("Loading sentence data..."):
+            progress_bar.progress(25)
+            st.session_state.data['all_sentences'] = fetch_all_sentences()
+        
+        # Load analytics data
+        with st.spinner("Loading analytics data..."):
+            progress_bar.progress(50)
+            st.session_state.data['sentiment_dist'] = fetch_data("sentiment-distribution", "ml_insights:sentiment_dist")
+            progress_bar.progress(60)
+            st.session_state.data['impact_scores'] = fetch_data("impact-scores", "ml_insights:impact_scores")
+            progress_bar.progress(70)
+            st.session_state.data['sentiment_impact'] = fetch_data("sentiment-impact", "ml_insights:sentiment_impact")
+            progress_bar.progress(75)
+            st.session_state.data['funnel_metrics'] = fetch_data("funnel-metrics", "ml_insights:funnel_metrics")
+            progress_bar.progress(80)
+            st.session_state.data['intent_dist'] = fetch_data("intent-distribution", "ml_insights:intent_dist")
+            progress_bar.progress(85)
+            st.session_state.data['high_impact'] = fetch_data("high-impact-sentiment", "ml_insights:high_impact")
+            progress_bar.progress(90)
+            st.session_state.data['alignment'] = fetch_data("stage-intent-alignment", "ml_insights:alignment")
+            progress_bar.progress(95)
+            st.session_state.data['info_impact'] = fetch_data("impact-information", "ml_insights:info_impact")
+            progress_bar.progress(100)
+        
+        # Update refresh timestamp and remove loading placeholder
+        st.session_state.data['last_refresh_time'] = current_time
+        st.session_state.data['data_loaded'] = True
+        time.sleep(0.5)  # Brief pause to show completion
+        init_placeholder.empty()
+    
+    # Display loading status
+    if st.session_state.data['all_sentences']:
+        st.success(f"✅ Data loaded successfully ({len(st.session_state.data['all_sentences'])} sentences)")
+    else:
+        st.error("❌ Failed to load sentence data")
+        st.stop()  # Stop execution if data loading failed
+        
     # Create tabs for different visualizations
     tabs = st.tabs([
         "Sentiment Distribution",
@@ -608,73 +709,64 @@ def main():
         "Impact Information"
     ])
 
-    # Fetch and render data for each tab
+    # Render each tab with cached data from session state
     with tabs[0]:
-        df_sentiment = fetch_data("sentiment-distribution", "ml_insights:sentiment_dist")
-        render_sentiment_distribution(df_sentiment)
+        render_sentiment_distribution(
+            st.session_state.data['sentiment_dist'], 
+            st.session_state.data['all_sentences']
+        )
 
     with tabs[1]:
-        df_impact = fetch_data("impact-scores", "ml_insights:impact_scores")
-        render_impact_scores(df_impact)
+        render_impact_scores(
+            st.session_state.data['impact_scores'], 
+            st.session_state.data['all_sentences']
+        )
 
     with tabs[2]:
-        df_sent_impact = fetch_data("sentiment-impact", "ml_insights:sentiment_impact")
-        render_sentiment_impact(df_sent_impact)
+        render_sentiment_impact(
+            st.session_state.data['sentiment_impact'], 
+            st.session_state.data['all_sentences']
+        )
 
     with tabs[3]:
-        df_funnel = fetch_data("funnel-metrics", "ml_insights:funnel_metrics")
-        render_funnel_metrics(df_funnel)
+        render_funnel_metrics(
+            st.session_state.data['funnel_metrics'], 
+            st.session_state.data['all_sentences']
+        )
 
     with tabs[4]:
-        df_intent = fetch_data("intent-distribution", "ml_insights:intent_dist")
-        render_intent_distribution(df_intent)
+        render_intent_distribution(
+            st.session_state.data['intent_dist'], 
+            st.session_state.data['all_sentences']
+        )
 
     with tabs[5]:
-        df_high_impact = fetch_data("high-impact-sentiment", "ml_insights:high_impact")
-        render_high_impact_sentiment(df_high_impact)
+        render_high_impact_sentiment(
+            st.session_state.data['high_impact'], 
+            st.session_state.data['all_sentences']
+        )
 
     with tabs[6]:
-        df_alignment = fetch_data("stage-intent-alignment", "ml_insights:alignment")
-        render_stage_intent_alignment(df_alignment)
+        render_stage_intent_alignment(
+            st.session_state.data['alignment'], 
+            st.session_state.data['all_sentences']
+        )
 
     with tabs[7]:
-        df_info_impact = fetch_data("impact-information", "ml_insights:info_impact")
-        render_impact_information(df_info_impact)
-
-    # Manual refresh button
-    if st.sidebar.button("Refresh Data Now"):
-        st.session_state.refresh_count += 1
-        logger.info(f"Manual refresh triggered. Refresh count: {st.session_state.refresh_count}")
-        
-        # Clear all Redis caches
-        if redis_client and redis_verified:
-            try:
-                redis_client.delete(
-                    "ml_insights:sentiment_dist",
-                    "ml_insights:impact_scores",
-                    "ml_insights:sentiment_impact",
-                    "ml_insights:funnel_metrics",
-                    "ml_insights:intent_dist",
-                    "ml_insights:high_impact",
-                    "ml_insights:alignment",
-                    "ml_insights:info_impact"
-                )
-                logger.info("Cleared all Redis caches")
-            except Exception as e:
-                logger.error(f"Failed to clear Redis caches: {e}")
-        
-        st.rerun()
-
-    # Auto-refresh logic
-    if auto_refresh:
-        st.empty()
-        time.sleep(refresh_interval)
-        st.session_state.refresh_count += 1
-        logger.info(f"Auto-refresh triggered. Refresh count: {st.session_state.refresh_count}")
-        st.rerun()
+        render_impact_information(
+            st.session_state.data['info_impact'], 
+            st.session_state.data['all_sentences']
+        )
 
     # Display refresh information
-    st.sidebar.write(f"Total Refreshes: {st.session_state.refresh_count}")
+    st.sidebar.write(f"Total Refreshes: {st.session_state.data['refresh_count']}")
+    st.sidebar.write(f"Last Refresh: {time.strftime('%H:%M:%S', time.localtime(st.session_state.data['last_refresh_time']))}")
+    
+    # Auto-refresh logic
+    if auto_refresh and (time.time() - st.session_state.data['last_refresh_time']) > refresh_interval:
+        st.session_state.data['refresh_count'] += 1
+        logger.info(f"Auto-refresh triggered. Refresh count: {st.session_state.data['refresh_count']}")
+        st.rerun()
 
 if __name__ == "__main__":
     main()

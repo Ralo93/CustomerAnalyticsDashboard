@@ -1,4 +1,5 @@
 import base64
+import sys
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
@@ -593,7 +594,7 @@ async def get_sentences_by_filter(
     sentiment: Optional[str] = None,
     business_impact: Optional[str] = None,
     intent: Optional[str] = None,
-    limit: int = 10,
+    limit: int = sys.maxsize,  # Using the maximum integer size
     db: Session = Depends(get_db)
 ):
     """Fetch sentences matching specific filter criteria"""
@@ -630,6 +631,52 @@ async def get_sentences_by_filter(
             "business_impact": label.business_impact if label else None,
             "intent": label.intent if label else None
         })
+    
+    return results
+
+@app.get("/analytics/all-sentences")
+async def get_all_sentences(limit: int = 1000, db: Session = Depends(get_db)):
+    """Fetch all sentences with their label data for client-side filtering
+    
+    This endpoint returns all sentences with their associated labels in a single call,
+    allowing for client-side filtering without multiple API calls.
+    
+    Args:
+        limit: Maximum number of sentences to return (default: 1000)
+        db: Database session
+        
+    Returns:
+        List of sentence objects with their label data
+    """
+    # Query sentences with labels, ordered by newest first
+    query = db.query(models.Sentence).join(
+        models.SentenceLabel, models.Sentence.id == models.SentenceLabel.sentence_id
+    ).order_by(models.Sentence.created_at.desc()).limit(limit)
+    
+    sentences = query.all()
+    
+    # Build response with sentence and label data combined
+    results = []
+    for sentence in sentences:
+        label = db.query(models.SentenceLabel).filter(
+            models.SentenceLabel.sentence_id == sentence.id
+        ).first()
+        
+        if label:
+            results.append({
+                "id": sentence.id,
+                "text": sentence.text,
+                "created_at": sentence.created_at.isoformat(),
+                "sales_funnel_stage": label.sales_funnel_stage,
+                "sentiment": label.sentiment,
+                "business_impact": label.business_impact,
+                "intent": label.intent,
+                # Add any other relevant fields
+                "sales_funnel_confidence": label.sales_funnel_confidence,
+                "sentiment_confidence": label.sentiment_confidence,
+                "intent_confidence": label.intent_confidence,
+                "business_impact_confidence": label.business_impact_confidence
+            })
     
     return results
 
