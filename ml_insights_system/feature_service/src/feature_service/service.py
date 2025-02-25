@@ -39,7 +39,7 @@ PORT = int(os.getenv('PORT', 8003))
 class FeatureExtractionRequest(BaseModel):
     sentence_id: str = Field(..., description="UUID of the sentence")
     text: str = Field(..., min_length=1, description="Text to analyze")
-
+    
 class FeatureExtractionResponse(BaseModel):
     sentence_id: str
     word_count: int
@@ -51,7 +51,61 @@ class FeatureExtractionResponse(BaseModel):
     entity_count: int
     embedding_model: str
     sentence_embedding: Optional[str] = None
+    
+    # Product mention fields
+    mentions_masterblaster: bool = False
+    masterblaster_quantity: Optional[int] = None
+    mentions_funpun: bool = False
+    funpun_quantity: Optional[int] = None
+    mentions_powerpro: bool = False
+    powerpro_quantity: Optional[int] = None
 
+def extract_product_mentions(text):
+    """
+    Extract product mentions and their quantities from text
+    
+    Returns:
+        dict: Dictionary with product mentions and quantities
+    """
+    result = {
+        "mentions_masterblaster": False,
+        "masterblaster_quantity": None,
+        "mentions_funpun": False,
+        "funpun_quantity": None,
+        "mentions_powerpro": False,
+        "powerpro_quantity": None
+    }
+    
+    text_lower = text.lower()
+    
+    # Check for MasterBlaster mentions
+    if "masterblaster" in text_lower or "master blaster" in text_lower:
+        result["mentions_masterblaster"] = True
+        # Try to find quantity using regex
+        import re
+        quantity_match = re.search(r'(\d+)\s*(?:units?|pieces?|pcs?|qty|quantity)?\s*(?:of)?\s*(?:masterblasters?|master\s+blasters?)', text_lower)
+        if quantity_match:
+            result["masterblaster_quantity"] = int(quantity_match.group(1))
+    
+    # Check for FunPun mentions
+    if "funpun" in text_lower or "fun pun" in text_lower:
+        result["mentions_funpun"] = True
+        # Try to find quantity
+        import re
+        quantity_match = re.search(r'(\d+)\s*(?:units?|pieces?|pcs?|qty|quantity)?\s*(?:of)?\s*(?:funpuns?|fun\s+puns?)', text_lower)
+        if quantity_match:
+            result["funpun_quantity"] = int(quantity_match.group(1))
+    
+    # Check for PowerPro mentions
+    if "powerpro" in text_lower or "power pro" in text_lower:
+        result["mentions_powerpro"] = True
+        # Try to find quantity
+        import re
+        quantity_match = re.search(r'(\d+)\s*(?:units?|pieces?|pcs?|qty|quantity)?\s*(?:of)?\s*(?:powerpros?|power\s+pros?)', text_lower)
+        if quantity_match:
+            result["powerpro_quantity"] = int(quantity_match.group(1))
+    
+    return result
 @app.post(
     "/extract_features", 
     response_model=FeatureExtractionResponse,
@@ -78,6 +132,9 @@ async def extract_features(request: FeatureExtractionRequest):
         # Count named entities
         entity_count = len(doc.ents)
         
+        # Extract product mentions
+        product_mentions = extract_product_mentions(request.text)
+        
         # Generate embedding
         embedding = embedding_model.encode(request.text)
         embedding_float64 = embedding.astype(np.float64)
@@ -94,8 +151,19 @@ async def extract_features(request: FeatureExtractionRequest):
             "adj_count": adj_count,
             "entity_count": entity_count,
             "embedding_model": "all-MiniLM-L6-v2",
-            "sentence_embedding": encoded_embedding
+            "sentence_embedding": encoded_embedding,
+            # Add product mentions
+            "mentions_masterblaster": product_mentions["mentions_masterblaster"],
+            "masterblaster_quantity": product_mentions["masterblaster_quantity"],
+            "mentions_funpun": product_mentions["mentions_funpun"],
+            "funpun_quantity": product_mentions["funpun_quantity"],
+            "mentions_powerpro": product_mentions["mentions_powerpro"],
+            "powerpro_quantity": product_mentions["powerpro_quantity"]
         }
+        
+        # Log product mentions
+        if any(product_mentions[key] for key in product_mentions if key.startswith("mentions_")):
+            logger.info(f"Found product mentions in sentence {request.sentence_id}: {product_mentions}")
         
         # Store features in database
         async with httpx.AsyncClient() as client:

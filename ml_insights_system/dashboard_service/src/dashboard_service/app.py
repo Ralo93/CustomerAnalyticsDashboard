@@ -39,7 +39,7 @@ load_dotenv()
 DB_SERVICE_URL = os.getenv("DB_SERVICE_URL", "http://localhost:8001")
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-CACHE_EXPIRY = int(os.getenv("CACHE_EXPIRY", 300))  # Extended cache time to 5 minutes
+CACHE_EXPIRY = int(os.getenv("CACHE_EXPIRY", 3600))  # Extended cache time to 5 minutes
 
 # Set up page configuration
 st.set_page_config(page_title="ML Insights Dashboard", page_icon="📊", layout="wide")
@@ -84,19 +84,80 @@ def verify_redis_caching():
         st.sidebar.error(f"❌ Redis Caching Error: {str(e)}")
         logger.error(f"Redis caching verification failed: {str(e)}")
         return False
-def fetch_data(endpoint: str, cache_key: str):
+    
+
+def fetch_data(endpoint: str, cache_key: str, params=None):
     """Fetch data from API with Redis caching"""
     try:
+        # Create a cache key that includes the params if any
+        full_cache_key = cache_key
+        if params:
+            param_str = '&'.join([f"{k}={v}" for k, v in params.items()])
+            full_cache_key = f"{cache_key}:{param_str}"
+        
         if redis_client:
-            cached_data = redis_client.get(cache_key)
+            cached_data = redis_client.get(full_cache_key)
             if cached_data:
                 logger.info(f"Retrieved {endpoint} data from Redis cache")
                 return pd.DataFrame(json.loads(cached_data))
         
         with httpx.Client(timeout=10.0) as client:
-            response = client.get(f"{DB_SERVICE_URL}/analytics/{endpoint}")
+            url = f"{DB_SERVICE_URL}/analytics/{endpoint}"
+            if params:
+                response = client.get(url, params=params)
+            else:
+                response = client.get(url)
             
-            if response.status_code != 200:
+            if response.status_code == 404:
+                logger.warning(f"Endpoint {endpoint} not found (404)")
+                # Return empty DataFrame with expected columns for each endpoint type
+                if endpoint == "sentiment-distribution":
+                    return pd.DataFrame(columns=['sales_funnel_stage', 'positive_count', 'negative_count', 'neutral_count', 'total_count'])
+                elif endpoint == "impact-scores":
+                    return pd.DataFrame(columns=['sales_funnel_stage', 'average_impact', 'count'])
+                elif endpoint == "sentiment-impact":
+                    return pd.DataFrame(columns=['sentiment', 'business_impact', 'count'])
+                elif endpoint == "funnel-metrics":
+                    return pd.DataFrame(columns=['stage', 'count', 'percentage'])
+                elif endpoint == "intent-distribution":
+                    return pd.DataFrame(columns=['intent', 'count', 'percentage'])
+                elif endpoint == "high-impact-sentiment":
+                    return pd.DataFrame(columns=['sales_funnel_stage', 'positive_high_impact_count', 'total_count', 'percentage'])
+                #elif endpoint == "stage-intent-alignment":
+                #    return pd.DataFrame(columns=['sales_funnel_stage', 'intent', 'count', 'alignment_score'])
+                elif endpoint == "impact-information":
+                    return pd.DataFrame(columns=['information_type', 'business_impact', 'count'])
+                elif endpoint == "product-mentions":
+                    return pd.DataFrame.from_dict({
+                        'total_sentences': 0,
+                        'with_any_product_mention': 0,
+                        'with_multiple_products': 0,
+                        'masterblaster': {
+                            'mention_count': 0,
+                            'percentage': 0,
+                            'with_quantity_count': 0,
+                            'avg_quantity': 0,
+                            'max_quantity': 0
+                        },
+                        'funpun': {
+                            'mention_count': 0,
+                            'percentage': 0,
+                            'with_quantity_count': 0,
+                            'avg_quantity': 0,
+                            'max_quantity': 0
+                        },
+                        'powerpro': {
+                            'mention_count': 0,
+                            'percentage': 0,
+                            'with_quantity_count': 0,
+                            'avg_quantity': 0,
+                            'max_quantity': 0
+                        }
+                    }, orient='index').transpose()
+                else:
+                    return pd.DataFrame()
+                
+            elif response.status_code != 200:
                 error_msg = f"Failed to fetch {endpoint} data: {response.status_code}"
                 logger.error(error_msg)
                 st.error(error_msg)
@@ -108,7 +169,7 @@ def fetch_data(endpoint: str, cache_key: str):
             if redis_client:
                 try:
                     redis_client.setex(
-                        cache_key,
+                        full_cache_key,
                         CACHE_EXPIRY,  # Use the global constant
                         json.dumps(df.to_dict(orient='records'))
                     )
@@ -122,11 +183,75 @@ def fetch_data(endpoint: str, cache_key: str):
         st.error(f"Error fetching {endpoint} data: {str(e)}")
         return pd.DataFrame()
 
+# Add this function to prepare filterable sentences based on relevance
+def prepare_filtered_sentences(all_sentences, relevance_filter="all"):
+    """
+    Filter sentences based on sales funnel relevance
+    
+    Args:
+        all_sentences: List of sentence objects
+        relevance_filter: 'all', 'relevant', or 'non_relevant'
+        
+    Returns:
+        Filtered list of sentences
+    """
+    if not all_sentences:
+        return []
+        
+    if relevance_filter.lower() == "all":
+        return all_sentences
+    elif relevance_filter.lower() == "relevant":
+        return [s for s in all_sentences if s.get('is_sales_funnel_relevant') == True]
+    elif relevance_filter.lower() == "non_relevant":
+        return [s for s in all_sentences if s.get('is_sales_funnel_relevant') == False]
+    else:
+        return all_sentences
+    
+# Fetch sales funnel relevance statistics
+def fetch_relevance_stats():
+    """Fetch statistics about sales funnel relevance"""
+    try:
+        cache_key = "ml_insights:relevance_stats"
+        
+        if redis_client:
+            cached_data = redis_client.get(cache_key)
+            if cached_data:
+                logger.info("Retrieved relevance stats from Redis cache")
+                return json.loads(cached_data)
+        
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(f"{DB_SERVICE_URL}/analytics/sales-funnel-relevance")
+            
+            if response.status_code != 200:
+                error_msg = f"Failed to fetch relevance stats: {response.status_code}"
+                logger.error(error_msg)
+                st.error(error_msg)
+                return {}
+            
+            data = response.json()
+            
+            if redis_client:
+                try:
+                    redis_client.setex(
+                        cache_key,
+                        CACHE_EXPIRY,
+                        json.dumps(data)
+                    )
+                    logger.info(f"Cached relevance stats for {CACHE_EXPIRY} seconds")
+                except Exception as cache_error:
+                    logger.error(f"Failed to cache relevance stats: {cache_error}")
+            
+            return data
+    except Exception as e:
+        logger.error(f"Error fetching relevance stats: {str(e)}")
+        st.error(f"Error fetching relevance stats: {str(e)}")
+        return {}
+
 # New function to fetch all sentences at once
-def fetch_all_sentences():
+def fetch_all_sentences(include_non_relevant=True):
     """Fetch all sentences with their label data for client-side filtering"""
     try:
-        cache_key = "ml_insights:all_sentences"
+        cache_key = f"ml_insights:all_sentences:{include_non_relevant}"
         
         if redis_client:
             cached_data = redis_client.get(cache_key)
@@ -135,7 +260,8 @@ def fetch_all_sentences():
                 return json.loads(cached_data)
         
         with httpx.Client(timeout=20.0) as client:  # Extended timeout for potentially large data
-            response = client.get(f"{DB_SERVICE_URL}/analytics/all-sentences")
+            params = {"include_non_relevant": "true" if include_non_relevant else "false"}
+            response = client.get(f"{DB_SERVICE_URL}/analytics/all-sentences", params=params)
             
             if response.status_code != 200:
                 error_msg = f"Failed to fetch all sentences: {response.status_code}"
@@ -162,23 +288,29 @@ def fetch_all_sentences():
         st.error(f"Error fetching all sentences: {str(e)}")
         return []
 
-# Filter sentences client-side
-def filter_sentences(all_sentences, filters: Dict[str, str], limit: int = 100):
+# Update filter_sentences to better handle various filtering cases
+def filter_sentences(all_sentences, filters: Dict[str, any], limit: int = 100):
     """Filter sentences client-side based on criteria"""
     if not all_sentences:
         return []
     
     filtered = all_sentences
     
-    # Apply filters
+    # Apply filters - handle various data types properly
     for key, value in filters.items():
-        if value and value != "All":
-            filtered = [s for s in filtered if s.get(key) == value]
+        if value is not None and value != "All":
+            # Boolean filter (for is_sales_funnel_relevant)
+            if isinstance(value, bool):
+                filtered = [s for s in filtered if s.get(key) == value]
+            # String filter (for most other attributes)
+            else:
+                filtered = [s for s in filtered if str(s.get(key, '')).lower() == str(value).lower()]
     
     # Sort by created_at (newest first) and limit results
     filtered = sorted(filtered, key=lambda x: x.get('created_at', ''), reverse=True)
     return filtered[:limit]
 
+# Modify the display_sentence_details function to better show sales funnel relevance information
 def display_sentence_details(sentences_data, limit=100):
     """Display sentence details in an expandable format"""
     if not sentences_data:
@@ -191,7 +323,16 @@ def display_sentence_details(sentences_data, limit=100):
     st.write(f"### Related Sentences ({len(display_sentences)} of {len(sentences_data)} matching)")
     
     for sentence in display_sentences:
-        with st.expander(f"{sentence['text'][:1500]}"):
+        # Create a more descriptive title that shows relevance
+        is_relevant = sentence.get('is_sales_funnel_relevant', None)
+        relevance_tag = ""
+        if is_relevant is True:
+            relevance_tag = "🟢 [Sales Funnel Relevant] "
+        elif is_relevant is False:
+            relevance_tag = "🔴 [Not Sales Funnel Relevant] "
+            
+        # Add the relevance tag to the title
+        with st.expander(f"{relevance_tag}{sentence['text'][:1500]}"):
             col1, col2 = st.columns(2)
             
             with col1:
@@ -201,10 +342,92 @@ def display_sentence_details(sentences_data, limit=100):
             
             with col2:
                 st.write("**Attributes:**")
-                st.write(f"- **Sales Funnel Stage:** {sentence['sales_funnel_stage']}")
-                st.write(f"- **Sentiment:** {sentence['sentiment']}")
-                st.write(f"- **Business Impact:** {sentence['business_impact']}")
-                st.write(f"- **Intent:** {sentence['intent']}")
+                # Clearly show relevance status
+                is_relevant_text = "Yes" if sentence.get('is_sales_funnel_relevant', False) else "No"
+                st.write(f"- **Sales Funnel Relevant:** {is_relevant_text}")
+                
+                # Show confidence score if available
+                if 'is_sales_funnel_relevant_confidence' in sentence:
+                    confidence = sentence['is_sales_funnel_relevant_confidence']
+                    if confidence:
+                        st.write(f"- **Relevance Confidence:** {confidence:.2f}")
+                
+                # Only show stage if relevant
+                if sentence.get('is_sales_funnel_relevant', False):
+                    sales_funnel_stage = sentence.get('sales_funnel_stage', 'N/A')
+                    st.write(f"- **Sales Funnel Stage:** {sales_funnel_stage if sales_funnel_stage else 'N/A'}")
+                
+                # Always show these attributes for all sentences
+                st.write(f"- **Sentiment:** {sentence.get('sentiment', 'N/A')}")
+                st.write(f"- **Business Impact:** {sentence.get('business_impact', 'N/A')}")
+                st.write(f"- **Intent:** {sentence.get('intent', 'N/A')}")
+
+# New function to render sales funnel relevance statistics
+def render_relevance_stats(stats, all_sentences):
+    """Display sales funnel relevance statistics"""
+    if not stats:
+        st.warning("No sales funnel relevance statistics available")
+        return
+    
+    st.subheader("Sales Funnel Relevance Overview")
+    
+    # Create metrics row
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric(
+            "Total Sentences", 
+            f"{stats['total_sentences']:,}"
+        )
+    
+    with col2:
+        st.metric(
+            "Sales Funnel Relevant", 
+            f"{stats['sales_funnel_relevant']:,}", 
+            f"{stats['relevant_percentage']:.1f}%"
+        )
+    
+    with col3:
+        st.metric(
+            "Non-Relevant", 
+            f"{stats['non_sales_funnel_relevant']:,}", 
+            f"{stats['non_relevant_percentage']:.1f}%"
+        )
+    
+    # Create pie chart data
+    pie_data = pd.DataFrame([
+        {"category": "Relevant", "count": stats['sales_funnel_relevant']},
+        {"category": "Not Relevant", "count": stats['non_sales_funnel_relevant']}
+    ])
+    
+    if stats['unclassified'] > 0:
+        pie_data = pie_data.append({"category": "Unclassified", "count": stats['unclassified']}, ignore_index=True)
+    
+    # Create pie chart
+    chart = alt.Chart(pie_data).mark_arc().encode(
+        theta=alt.Theta('count:Q'),
+        color=alt.Color('category:N', scale=alt.Scale(
+            domain=['Relevant', 'Not Relevant', 'Unclassified'],
+            range=['#2ecc71', '#e74c3c', '#95a5a6']
+        )),
+        tooltip=['category', alt.Tooltip('count:Q', format=',')]
+    ).properties(
+        width=400,
+        height=400,
+        title="Distribution of Sales Funnel Relevance"
+    )
+    
+    st.altair_chart(chart, use_container_width=True)
+    
+    # Filter selection
+    relevant_only = st.checkbox("Show only sales funnel relevant sentences", value=False, key="relevance_stats_checkbox")
+    
+    if relevant_only:
+        filtered_sentences = filter_sentences(all_sentences, {'is_sales_funnel_relevant': True})
+    else:
+        filtered_sentences = filter_sentences(all_sentences, {})
+    
+    display_sentence_details(filtered_sentences)
 
 # Visualization functions with client-side filtering
 def render_sentiment_distribution(df, all_sentences):
@@ -214,6 +437,7 @@ def render_sentiment_distribution(df, all_sentences):
         return
 
     st.subheader("Sentiment Distribution by Sales Funnel Stage")
+    st.info("This chart only shows data for sales funnel relevant sentences")
     
     # Create normalized stacked bar chart
     df_melted = pd.melt(
@@ -266,16 +490,15 @@ def render_sentiment_distribution(df, all_sentences):
         )
     
     # Use client-side filtering
-    filters = {}
+    filters = {'is_sales_funnel_relevant': True}  # Always filter for relevant sentences
     if selected_stage != "All":
         filters['sales_funnel_stage'] = selected_stage
     
     if selected_sentiment != "All":
         filters['sentiment'] = selected_sentiment
     
-    if filters:
-        filtered_sentences = filter_sentences(all_sentences, filters)
-        display_sentence_details(filtered_sentences)
+    filtered_sentences = filter_sentences(all_sentences, filters)
+    display_sentence_details(filtered_sentences)
 
 def render_impact_scores(df, all_sentences):
     """Visualize average impact scores per stage"""
@@ -284,6 +507,7 @@ def render_impact_scores(df, all_sentences):
         return
 
     st.subheader("Average Impact Scores by Sales Funnel Stage")
+    st.info("This chart only shows data for sales funnel relevant sentences")
     
     # Create bar chart
     chart = alt.Chart(df).mark_bar().encode(
@@ -310,20 +534,54 @@ def render_impact_scores(df, all_sentences):
         key="impact_stage_select"
     )
     
+    # Use client-side filtering
+    filters = {'is_sales_funnel_relevant': True}  # Always filter for relevant sentences
     if selected_stage and selected_stage != "All":
-        filtered_sentences = filter_sentences(all_sentences, {'sales_funnel_stage': selected_stage})
-        display_sentence_details(filtered_sentences)
+        filters['sales_funnel_stage'] = selected_stage
+    
+    filtered_sentences = filter_sentences(all_sentences, filters)
+    display_sentence_details(filtered_sentences)
+
 
 def render_sentiment_impact(df, all_sentences):
     """Visualize sentiment and business impact correlation"""
-    if df.empty:
-        st.warning("No sentiment impact data available")
+    # Add relevance filter at the top
+    relevance_filter = st.radio(
+        "Filter by Sales Funnel Relevance",
+        ["All Sentences", "Relevant Only", "Non-Relevant Only"],
+        horizontal=True,
+        key="sentiment_impact_relevance_filter"
+    )
+    
+    # Convert UI selection to API parameter
+    api_relevance_param = None
+    if relevance_filter == "Relevant Only":
+        api_relevance_param = True
+    elif relevance_filter == "Non-Relevant Only":
+        api_relevance_param = False
+    
+    # Re-fetch data with the selected filter
+    with st.spinner("Updating chart..."):
+        # Use the fetch_data function with params
+        filtered_df = fetch_data(
+            "sentiment-impact", 
+            f"ml_insights:sentiment_impact:{relevance_filter}",
+            params={"is_sales_funnel_relevant": api_relevance_param} if api_relevance_param is not None else None
+        )
+    
+    if filtered_df.empty:
+        st.warning("No sentiment impact data available for the selected filter")
         return
 
     st.subheader("Sentiment and Business Impact Correlation")
     
-    # Create heatmap
-    chart = alt.Chart(df).mark_rect().encode(
+    # Check that required columns exist
+    if 'sentiment' not in filtered_df.columns or 'business_impact' not in filtered_df.columns:
+        st.error("Required columns not found in data")
+        return
+    
+    # Create heatmap using the filtered data
+    chart = alt.Chart(filtered_df).mark_rect().encode(
         x=alt.X('sentiment:N', title='Sentiment'),
         y=alt.Y('business_impact:N', title='Business Impact'),
         color=alt.Color('count:Q', scale=alt.Scale(scheme='viridis')),
@@ -336,34 +594,42 @@ def render_sentiment_impact(df, all_sentences):
     # Display the chart
     st.altair_chart(chart, use_container_width=True)
     
-    # Filter selection controls
+    # Filter selection controls - using the new filtered dataframe
+    available_sentiments = filtered_df['sentiment'].dropna().unique().tolist() if not filtered_df.empty else []
+    available_impacts = filtered_df['business_impact'].dropna().unique().tolist() if not filtered_df.empty else []
+    
     col1, col2 = st.columns(2)
     with col1:
         selected_sentiment = st.selectbox(
             "Select Sentiment", 
-            options=["All"] + sorted(df['sentiment'].unique().tolist()),
+            options=["All"] + sorted(available_sentiments),
             key="sentiment_impact_select"
         )
     
     with col2:
         selected_impact = st.selectbox(
             "Select Business Impact",
-            options=["All"] + sorted(df['business_impact'].unique().tolist()),
+            options=["All"] + sorted(available_impacts),
             key="business_impact_select"
         )
     
-    # Use client-side filtering
+    # Use client-side filtering for displaying sentences
     filters = {}
+    
+    # Apply relevance filter
+    if relevance_filter == "Relevant Only":
+        filters['is_sales_funnel_relevant'] = True
+    elif relevance_filter == "Non-Relevant Only":
+        filters['is_sales_funnel_relevant'] = False
+    
     if selected_sentiment != "All":
         filters['sentiment'] = selected_sentiment
     
     if selected_impact != "All":
         filters['business_impact'] = selected_impact
     
-    if filters:
-        filtered_sentences = filter_sentences(all_sentences, filters)
-        display_sentence_details(filtered_sentences)
-
+    filtered_sentences = filter_sentences(all_sentences, filters)
+    display_sentence_details(filtered_sentences)
 
 def render_funnel_metrics(df, all_sentences):
     """Visualize funnel metrics with correct funnel stage order"""
@@ -372,6 +638,7 @@ def render_funnel_metrics(df, all_sentences):
         return
 
     st.subheader("Sales Funnel Metrics")
+    st.info("This chart only shows data for sales funnel relevant sentences")
     
     # Define the correct order for funnel stages
     funnel_order = ["Awareness", "Interest", "Consideration", "Intent", "Evaluation", "Purchase"]
@@ -416,10 +683,15 @@ def render_funnel_metrics(df, all_sentences):
         key="funnel_stage_select"
     )
     
+    # Always filter for relevant sentences since this is funnel data
+    filters = {'is_sales_funnel_relevant': True}
     if selected_stage and selected_stage != "All":
-        filtered_sentences = filter_sentences(all_sentences, {'sales_funnel_stage': selected_stage})
-        display_sentence_details(filtered_sentences)
+        filters['sales_funnel_stage'] = selected_stage
+    
+    filtered_sentences = filter_sentences(all_sentences, filters)
+    display_sentence_details(filtered_sentences)
 
+# Update render_intent_distribution with improved relevance filtering
 def render_intent_distribution(df, all_sentences):
     """Visualize communication intent distribution"""
     if df.empty:
@@ -445,6 +717,14 @@ def render_intent_distribution(df, all_sentences):
     # Display the chart
     st.altair_chart(chart, use_container_width=True)
     
+    # Add relevance filter with a more intuitive radio button
+    #relevance_filter = st.radio(
+    #    "Filter by Sales Funnel Relevance",
+    #    ["All Sentences", "Relevant Only", "Non-Relevant Only"],
+    #    horizontal=True,
+    #    key="intent_relevance_filter"
+    #)
+    
     # Filter selection
     selected_intent = st.selectbox(
         "Select Intent to View Sentences",
@@ -452,52 +732,243 @@ def render_intent_distribution(df, all_sentences):
         key="intent_select"
     )
     
+    # Use client-side filtering
+    filters = {}
+    
+    # Apply relevance filter
+    #if relevance_filter == "Relevant Only":
+    filters['is_sales_funnel_relevant'] = False
+    #elif relevance_filter == "Non-Relevant Only":
+    #    filters['is_sales_funnel_relevant'] = False
+    
     if selected_intent and selected_intent != "All":
-        filtered_sentences = filter_sentences(all_sentences, {'intent': selected_intent})
-        display_sentence_details(filtered_sentences)
+        filters['intent'] = selected_intent
+    
+    filtered_sentences = filter_sentences(all_sentences, filters)
+    display_sentence_details(filtered_sentences)
 
 def render_high_impact_sentiment(df, all_sentences):
-    """Visualize high impact and positive sentiment per stage"""
-    if df.empty:
-        st.warning("No high impact sentiment data available")
-        return
-
-    st.subheader("High Impact Positive Sentiment by Stage")
+    """
+    Visualize high and critical business impact sentences along with their sentiment distribution.
+    Oriented similarly to the Sentiment Distribution by Sales Funnel Stage visualization.
+    """
+    st.subheader("High Business Impact Analysis")
     
-    # Create chart
-    chart = alt.Chart(df).mark_bar().encode(
-        x=alt.X('sales_funnel_stage:N', title='Sales Funnel Stage'),
-        y=alt.Y('positive_high_impact_count:Q', title='High Impact Positive Count'),
-        color=alt.Color('percentage:Q', scale=alt.Scale(scheme='viridis')),
-        tooltip=[
-            'sales_funnel_stage', 
-            alt.Tooltip('positive_high_impact_count:Q', title='High Impact Positive Count'),
-            alt.Tooltip('total_count:Q', title='Total Count'),
-            alt.Tooltip('percentage:Q', format='.1f', title='Percentage')
-        ]
-    ).properties(
-        width=600,
-        height=400
-    ).interactive()
-
+    # Create a filter for impact level
+    impact_filter = st.radio(
+        "Select Business Impact Level",
+        ["High & Critical", "High Only", "Critical Only"],
+        horizontal=True,
+        key="impact_level_filter"
+    )
+    
+    # Fetch data based on the selected impact levels
+    with st.spinner("Loading high impact data..."):
+        if impact_filter == "High Only":
+            impact_params = {"business_impact": "High"}
+            impact_title = "High"
+        elif impact_filter == "Critical Only":
+            impact_params = {"business_impact": "Critical"}
+            impact_title = "Critical"
+        else:  # "High & Critical"
+            impact_params = {"business_impact": ["High", "Critical"]}
+            impact_title = "High & Critical"
+        
+        # Fetch the filtered high impact data
+        high_impact_data = fetch_data(
+            "sentiment-impact", 
+            f"ml_insights:high_impact_{impact_filter.lower().replace(' ', '_')}",
+            params=impact_params
+        )
+    
+    if high_impact_data.empty:
+        st.warning(f"No {impact_title} business impact data available")
+        return
+    
+    # Create a chart showing sentiment distribution for high impact sentences
+    st.subheader(f"{impact_title} Business Impact Sentiment Distribution")
+    
+    # Prepare data for visualization
+    # If data doesn't have sales_funnel_stage column, add a filter to allow showing by stage
+    show_by_stage = False
+    if 'sales_funnel_stage' in high_impact_data.columns:
+        show_by_stage = st.checkbox("Show distribution by sales funnel stage", value=True)
+    
+    if show_by_stage and 'sales_funnel_stage' in high_impact_data.columns:
+        # Chart showing distribution by stage, similar to sentiment distribution
+        chart = alt.Chart(high_impact_data).mark_bar().encode(
+            x=alt.X('sales_funnel_stage:N', title='Sales Funnel Stage'),
+            y=alt.Y('count:Q', title='Count'),
+            color=alt.Color('sentiment:N', scale=alt.Scale(
+                domain=['Positive', 'Negative', 'Neutral'],
+                range=['#2ecc71', '#e74c3c', '#95a5a6']
+            )),
+            tooltip=[
+                alt.Tooltip('sales_funnel_stage:N', title='Stage'),
+                alt.Tooltip('sentiment:N', title='Sentiment'),
+                alt.Tooltip('count:Q', format=',', title='Count'),
+                alt.Tooltip('business_impact:N', title='Business Impact')
+            ]
+        ).properties(
+            width=600,
+            height=400
+        ).interactive()
+    else:
+        # Donut chart for overall sentiment distribution
+        chart = alt.Chart(high_impact_data).mark_arc(innerRadius=50).encode(
+            theta=alt.Theta('count:Q'),
+            color=alt.Color('sentiment:N', scale=alt.Scale(
+                domain=['Positive', 'Negative', 'Neutral'],
+                range=['#2ecc71', '#e74c3c', '#95a5a6']
+            )),
+            tooltip=[
+                alt.Tooltip('sentiment:N', title='Sentiment'),
+                alt.Tooltip('count:Q', format=',', title='Count'),
+                alt.Tooltip('business_impact:N', title='Business Impact')
+            ]
+        ).properties(
+            width=500,
+            height=500,
+            title=f"{impact_title} Business Impact Sentiment Distribution"
+        ).interactive()
+    
     # Display the chart
     st.altair_chart(chart, use_container_width=True)
     
-    # Filter selection
-    selected_stage = st.selectbox(
-        "Select Stage to View High Impact Positive Sentences",
-        options=["All"] + sorted(df['sales_funnel_stage'].unique().tolist()),
-        key="high_impact_stage_select"
-    )
+    # Add metrics row to show totals
+    col1, col2, col3 = st.columns(3)
     
-    # Use client-side filtering with multiple criteria
-    if selected_stage and selected_stage != "All":
-        filtered_sentences = filter_sentences(all_sentences, {
-            'sales_funnel_stage': selected_stage,
-            'sentiment': 'Positive',
-            'business_impact': 'High'
-        })
-        display_sentence_details(filtered_sentences)
+    # Calculate totals by sentiment
+    total_count = high_impact_data['count'].sum()
+    
+    # Group by sentiment to get counts
+    sentiment_counts = high_impact_data.groupby('sentiment')['count'].sum().to_dict()
+    positive_count = sentiment_counts.get('Positive', 0)
+    negative_count = sentiment_counts.get('Negative', 0)
+    neutral_count = sentiment_counts.get('Neutral', 0)
+    
+    # Calculate percentages
+    positive_pct = (positive_count / total_count * 100) if total_count > 0 else 0
+    negative_pct = (negative_count / total_count * 100) if total_count > 0 else 0
+    neutral_pct = (neutral_count / total_count * 100) if total_count > 0 else 0
+    
+    with col1:
+        st.metric(
+            "Positive Sentiment", 
+            f"{positive_count:,}", 
+            f"{positive_pct:.1f}%"
+        )
+    
+    with col2:
+        st.metric(
+            "Negative Sentiment", 
+            f"{negative_count:,}", 
+            f"{negative_pct:.1f}%"
+        )
+    
+    with col3:
+        st.metric(
+            "Neutral Sentiment", 
+            f"{neutral_count:,}", 
+            f"{neutral_pct:.1f}%"
+        )
+    
+    # Filter selection controls
+    col1, col2 = st.columns(2)
+    with col1:
+        if show_by_stage and 'sales_funnel_stage' in high_impact_data.columns:
+            selected_stage = st.selectbox(
+                "Select Sales Funnel Stage", 
+                options=["All"] + sorted(high_impact_data['sales_funnel_stage'].unique().tolist()),
+                key="high_impact_stage_filter"
+            )
+        else:
+            selected_stage = "All"
+    
+    with col2:
+        selected_sentiment = st.selectbox(
+            "Select Sentiment",
+            options=["All", "Positive", "Negative", "Neutral"],
+            key="high_impact_sentiment_filter"
+        )
+    
+    # Use client-side filtering
+    filters = {}
+    
+    # Apply impact filter
+    if impact_filter == "High Only":
+        filters['business_impact'] = "High"
+    elif impact_filter == "Critical Only":
+        filters['business_impact'] = "Critical"
+    else:
+        # For "High & Critical", we need to handle this specially since our filter function
+        # doesn't support OR conditions directly
+        # We'll retrieve both sets and combine them
+        high_filters = filters.copy()
+        high_filters['business_impact'] = "High"
+        critical_filters = filters.copy()
+        critical_filters['business_impact'] = "Critical"
+        
+        high_sentences = filter_sentences(all_sentences, high_filters)
+        critical_sentences = filter_sentences(all_sentences, critical_filters)
+        
+        # Combine both sets (avoiding duplicates if any)
+        combined_sentences = high_sentences + [s for s in critical_sentences if s not in high_sentences]
+        
+        # Apply additional filters
+        if selected_stage != "All":
+            combined_sentences = [s for s in combined_sentences if s.get('sales_funnel_stage') == selected_stage]
+        
+        if selected_sentiment != "All":
+            combined_sentences = [s for s in combined_sentences if s.get('sentiment') == selected_sentiment]
+        
+        display_sentence_details(combined_sentences)
+        return
+    
+    # Continue with standard filtering for "High Only" or "Critical Only" cases
+    if selected_stage != "All":
+        filters['sales_funnel_stage'] = selected_stage
+    
+    if selected_sentiment != "All":
+        filters['sentiment'] = selected_sentiment
+    
+    filtered_sentences = filter_sentences(all_sentences, filters)
+    display_sentence_details(filtered_sentences)
+
+    # Additional analysis - Top issues or patterns
+    if not high_impact_data.empty:
+        st.subheader(f"Analysis of {impact_title} Business Impact Sentences")
+        
+        # If we have other attributes like 'information_type' or 'intent', show their distribution
+        if 'information_type' in high_impact_data.columns:
+            # Show information type distribution
+            info_chart = alt.Chart(high_impact_data).mark_bar().encode(
+                x=alt.X('information_type:N', title='Information Type'),
+                y=alt.Y('count:Q', title='Count'),
+                color=alt.Color('information_type:N', scale=alt.Scale(scheme='category10')),
+                tooltip=['information_type', 'count']
+            ).properties(
+                width=600,
+                height=300,
+                title=f"Information Types in {impact_title} Business Impact Sentences"
+            ).interactive()
+            
+            st.altair_chart(info_chart, use_container_width=True)
+        
+        if 'intent' in high_impact_data.columns:
+            # Show intent distribution
+            intent_chart = alt.Chart(high_impact_data).mark_bar().encode(
+                x=alt.X('intent:N', title='Intent'),
+                y=alt.Y('count:Q', title='Count'),
+                color=alt.Color('intent:N', scale=alt.Scale(scheme='category10')),
+                tooltip=['intent', 'count']
+            ).properties(
+                width=600,
+                height=300,
+                title=f"Intent Distribution in {impact_title} Business Impact Sentences"
+            ).interactive()
+            
+            st.altair_chart(intent_chart, use_container_width=True)
 
 def render_stage_intent_alignment(df, all_sentences):
     """Visualize alignment between sales funnel stages and intents"""
@@ -506,6 +977,7 @@ def render_stage_intent_alignment(df, all_sentences):
         return
 
     st.subheader("Sales Funnel Stage and Intent Alignment")
+    st.info("This chart only shows data for sales funnel relevant sentences")
     
     # Create heatmap
     chart = alt.Chart(df).mark_rect().encode(
@@ -543,27 +1015,50 @@ def render_stage_intent_alignment(df, all_sentences):
         )
     
     # Use client-side filtering
-    filters = {}
+    filters = {'is_sales_funnel_relevant': True}  # Always filter for relevant sentences
     if selected_stage != "All":
         filters['sales_funnel_stage'] = selected_stage
     
     if selected_intent != "All":
         filters['intent'] = selected_intent
     
-    if filters:
-        filtered_sentences = filter_sentences(all_sentences, filters)
-        display_sentence_details(filtered_sentences)
+    filtered_sentences = filter_sentences(all_sentences, filters)
+    display_sentence_details(filtered_sentences)
 
 def render_impact_information(df, all_sentences):
     """Visualize relationship between information type and business impact"""
-    if df.empty:
-        st.warning("No impact-information data available")
+    # Add relevance filter at the top
+    relevance_filter = st.radio(
+        "Filter by Sales Funnel Relevance",
+        ["All Sentences", "Relevant Only", "Non-Relevant Only"],
+        horizontal=True,
+        key="impact_info_relevance_filter"
+    )
+    
+    # Convert UI selection to API parameter
+    api_relevance_param = None
+    if relevance_filter == "Relevant Only":
+        api_relevance_param = True
+    elif relevance_filter == "Non-Relevant Only":
+        api_relevance_param = False
+    
+    # Re-fetch data with the selected filter
+    with st.spinner("Updating chart..."):
+        # Use the fetch_data function with params
+        filtered_df = fetch_data(
+            "impact-information", 
+            "ml_insights:impact_info",
+            params={"is_sales_funnel_relevant": api_relevance_param} if api_relevance_param is not None else None
+        )
+    
+    if filtered_df.empty:
+        st.warning("No impact-information data available for the selected filter")
         return
-
+    
     st.subheader("Information Type and Business Impact Relationship")
     
-    # Create grouped bar chart
-    chart = alt.Chart(df).mark_bar().encode(
+    # Create grouped bar chart with the filtered data
+    chart = alt.Chart(filtered_df).mark_bar().encode(
         x=alt.X('information_type:N', title='Information Type'),
         y=alt.Y('count:Q', title='Count'),
         color=alt.Color('business_impact:N', scale=alt.Scale(scheme='tableau10')),
@@ -581,28 +1076,358 @@ def render_impact_information(df, all_sentences):
     with col1:
         selected_info_type = st.selectbox(
             "Select Information Type", 
-            options=["All"] + sorted(df['information_type'].unique().tolist()),
+            options=["All"] + sorted(filtered_df['information_type'].unique().tolist()),
             key="info_type_select"
         )
     
     with col2:
         selected_impact = st.selectbox(
             "Select Business Impact",
-            options=["All"] + sorted(df['business_impact'].unique().tolist()),
+            options=["All"] + sorted(filtered_df['business_impact'].unique().tolist()),
             key="info_impact_select"
         )
     
-    # Use client-side filtering
+    # Use client-side filtering for the sentence display
     filters = {}
+    
+    # Apply relevance filter
+    if relevance_filter == "Relevant Only":
+        filters['is_sales_funnel_relevant'] = True
+    elif relevance_filter == "Non-Relevant Only":
+        filters['is_sales_funnel_relevant'] = False
+    
     if selected_info_type != "All":
         filters['intent'] = selected_info_type
     
     if selected_impact != "All":
         filters['business_impact'] = selected_impact
     
-    if filters:
-        filtered_sentences = filter_sentences(all_sentences, filters)
-        display_sentence_details(filtered_sentences)
+    filtered_sentences = filter_sentences(all_sentences, filters)
+    display_sentence_details(filtered_sentences)
+def render_product_mentions(df, all_sentences):
+    """Visualize product mention statistics"""
+    # Setup logging
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+
+    # Log the raw input data
+    logger.debug(f"Raw input data type: {type(df)}")
+    logger.debug(f"Raw input data contents: {df}")
+
+    # Validate and normalize input data
+    if df is None or df.empty:
+        logger.error("No data provided for product mentions")
+        st.error("No data provided for product mentions")
+        return
+
+    # Extract data based on the DataFrame structure shown in the logs
+    # The DataFrame appears to have rows for mention_count, quantity, percentage
+    # and columns for each product
+
+    # First, check if we have the expected structure
+    try:
+        # Check if the DataFrame has the expected index (rows)
+        if isinstance(df.index, pd.Index) and 'mention_count' in df.index and 'quantity' in df.index:
+            # This is the structure we see in the logs - extract accordingly
+            logger.debug("Found transposed DataFrame structure with metrics as rows")
+            
+            # Extract total values
+            total_sentences = df.loc['mention_count', 'total_sentences']
+            with_any_product = df.loc['mention_count', 'with_any_product_mention']
+            with_multiple = df.loc['mention_count', 'with_multiple_products']
+            
+            # Product columns
+            product_keys = ['masterblaster', 'funpun', 'powerpro']
+            product_names = ['MasterBlaster', 'FunPun', 'PowerPro']
+            
+            # Prepare product data
+            product_data = []
+            
+            for product_key, product_name in zip(product_keys, product_names):
+                if product_key in df.columns:
+                    mention_count = df.loc['mention_count', product_key]
+                    quantity = df.loc['quantity', product_key]
+                    percentage = df.loc['percentage', product_key]
+                    
+                    logger.debug(f"Product {product_name} - Extracted data: Mentions={mention_count}, Quantity={quantity}, Percentage={percentage}")
+                    
+                    # Calculate average quantity if we have mentions
+                    avg_quantity = quantity / mention_count if mention_count > 0 else 0
+                    
+                    # Calculate a reasonable max quantity estimate
+                    # If we have only 1 mention, max = total
+                    # If we have multiple mentions, estimate max as higher than average
+                    if mention_count <= 1:
+                        max_quantity = quantity  # If only one mention, max = total
+                    else:
+                        # Estimate max as approximately 2-3x the average
+                        # This is a heuristic since we don't have individual values
+                        max_quantity = min(quantity, avg_quantity * 2.5)  # Cap at total quantity
+                    
+                    product_data.append({
+                        'Product': product_name,
+                        'Mention Count': float(mention_count),
+                        'Percentage': float(percentage),
+                        'With Quantity Count': float(mention_count) if quantity > 0 else 0,
+                        'Avg Quantity': float(avg_quantity),
+                        'Max Quantity': float(max_quantity),
+                        'Total Quantity': float(quantity),
+                        'Percentage Display': f"{percentage:.1f}%"
+                    })
+                else:
+                    logger.warning(f"Product column {product_key} not found in DataFrame")
+        else:
+            # Try to handle it as a regular DataFrame or dict
+            logger.debug("Trying to handle as standard DataFrame or dict")
+            if isinstance(df, pd.DataFrame):
+                df = df.to_dict('records')[0] if len(df) > 0 else {}
+            
+            # Extract from dictionary structure
+            total_sentences = df.get('total_sentences', 0)
+            with_any_product = df.get('with_any_product_mention', 0)
+            with_multiple = df.get('with_multiple_products', 0)
+            
+            product_keys = ['masterblaster', 'funpun', 'powerpro']
+            product_names = ['MasterBlaster', 'FunPun', 'PowerPro']
+            
+            product_data = []
+            
+            for product_key, product_name in zip(product_keys, product_names):
+                product_info = df.get(product_key, {})
+                
+                if isinstance(product_info, dict):
+                    mention_count = product_info.get('mention_count', 0)
+                    quantity = product_info.get('quantity', 0)
+                    percentage = product_info.get('percentage', 0)
+                else:
+                    mention_count = product_info
+                    quantity = df.get(f'{product_key}_quantity', 0)
+                    percentage = df.get(f'{product_key}_percentage', 0)
+                
+                logger.debug(f"Product {product_name} - Dict data: Mentions={mention_count}, Quantity={quantity}, Percentage={percentage}")
+                
+                # Calculate average quantity
+                avg_quantity = quantity / mention_count if mention_count > 0 else 0
+                
+                # Calculate max quantity
+                if mention_count <= 1:
+                    max_quantity = quantity
+                else:
+                    max_quantity = min(quantity, avg_quantity * 2.5)
+                
+                product_data.append({
+                    'Product': product_name,
+                    'Mention Count': float(mention_count),
+                    'Percentage': float(percentage),
+                    'With Quantity Count': float(mention_count) if quantity > 0 else 0,
+                    'Avg Quantity': float(avg_quantity),
+                    'Max Quantity': float(max_quantity),
+                    'Total Quantity': float(quantity),
+                    'Percentage Display': f"{percentage:.1f}%"
+                })
+    except Exception as e:
+        logger.error(f"Error extracting data: {e}")
+        st.error(f"Could not process product mention data: {e}")
+        return
+
+    # Log the extracted values
+    logger.debug(f"Total Sentences: {total_sentences}")
+    logger.debug(f"With Any Product: {with_any_product}")
+    logger.debug(f"With Multiple Products: {with_multiple}")
+    
+    # Create DataFrame from product data
+    try:
+        product_df = pd.DataFrame(product_data)
+        
+        # Log the final DataFrame
+        logger.debug("Final Product DataFrame:")
+        logger.debug(product_df.to_string())
+        
+        # Explicitly set column types to avoid Altair type inference issues
+        product_df = product_df.astype({
+            'Product': 'category',
+            'Mention Count': 'float64',
+            'Percentage': 'float64',
+            'With Quantity Count': 'float64',
+            'Avg Quantity': 'float64',
+            'Max Quantity': 'float64',
+            'Total Quantity': 'float64',
+            'Percentage Display': 'string'
+        })
+    except Exception as e:
+        logger.error(f"Error creating DataFrame: {e}")
+        st.error(f"Could not create visualization DataFrame: {e}")
+        return
+    
+    # Display metrics
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Sentences", f"{total_sentences:,}")
+    
+    with col2:
+        percentage_with_product = (with_any_product / total_sentences * 100) if total_sentences > 0 else 0
+        st.metric("Sentences with Products", f"{with_any_product:,}", f"{percentage_with_product:.1f}%")
+    
+    with col3:
+        st.metric("Multiple Product Mentions", f"{with_multiple:,}")
+    
+    # Visualization
+    try:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            mention_chart = alt.Chart(product_df).mark_bar().encode(
+                x=alt.X('Product:N', title='Product', sort=product_names),
+                y=alt.Y('Mention Count:Q', title='Number of Mentions', scale=alt.Scale(zero=True)),
+                color=alt.Color('Product:N', scale=alt.Scale(scheme='category10')),
+                tooltip=[
+                    alt.Tooltip('Product:N'),
+                    alt.Tooltip('Mention Count:Q', title='Mentions'),
+                    alt.Tooltip('With Quantity Count:Q', title='Mentions with Quantity'),
+                    alt.Tooltip('Avg Quantity:Q', title='Average Quantity', format='.2f'),
+                    alt.Tooltip('Max Quantity:Q', title='Max Quantity', format='.0f'),
+                    alt.Tooltip('Total Quantity:Q', title='Total Quantity', format='.0f'),
+                    alt.Tooltip('Percentage Display:N', title='Percentage of Total Sentences')
+                ]
+            ).properties(
+                width=300,
+                height=400,
+                title='Product Mentions Distribution'
+            ).interactive()
+            
+            st.altair_chart(mention_chart, use_container_width=True)
+        
+        with col2:
+            percentage_chart = alt.Chart(product_df).mark_arc(innerRadius=50).encode(
+                theta=alt.Theta('Mention Count:Q', stack=True),
+                color=alt.Color('Product:N', scale=alt.Scale(scheme='category10')),
+                tooltip=[
+                    alt.Tooltip('Product:N'),
+                    alt.Tooltip('Mention Count:Q', title='Mentions'),
+                    alt.Tooltip('With Quantity Count:Q', title='Mentions with Quantity'),
+                    alt.Tooltip('Avg Quantity:Q', title='Average Quantity', format='.2f'),
+                    alt.Tooltip('Max Quantity:Q', title='Max Quantity', format='.0f'),
+                    alt.Tooltip('Total Quantity:Q', title='Total Quantity', format='.0f'),
+                    alt.Tooltip('Percentage Display:N', title='Percentage of Total Sentences')
+                ]
+            ).properties(
+                width=300,
+                height=400,
+                title='Product Mentions Percentage'
+            ).interactive()
+            
+            st.altair_chart(percentage_chart, use_container_width=True)
+    
+    except Exception as e:
+        logger.error(f"Visualization error: {e}")
+        st.error(f"Could not create visualizations: {e}")
+        return
+
+    # Quantity details with logging
+    st.subheader("Quantity Details")
+    
+    # Create a quantity details dataframe with clearer representations
+    quantity_df = pd.DataFrame([
+        {"Metric": "Total Quantity", "MasterBlaster": product_df.loc[0, "Total Quantity"], "FunPun": product_df.loc[1, "Total Quantity"], "PowerPro": product_df.loc[2, "Total Quantity"]},
+        {"Metric": "Average Quantity", "MasterBlaster": product_df.loc[0, "Avg Quantity"], "FunPun": product_df.loc[1, "Avg Quantity"], "PowerPro": product_df.loc[2, "Avg Quantity"]},
+        {"Metric": "Maximum Quantity", "MasterBlaster": product_df.loc[0, "Max Quantity"], "FunPun": product_df.loc[1, "Max Quantity"], "PowerPro": product_df.loc[2, "Max Quantity"]}
+    ])
+    
+    # Format the quantity values
+    for col in ["MasterBlaster", "FunPun", "PowerPro"]:
+        quantity_df[col] = quantity_df.apply(
+            lambda row: f"{row[col]:.2f}" if row["Metric"] == "Average Quantity" else f"{row[col]:.0f}", 
+            axis=1
+        )
+    
+    # Log and display the quantity details
+    logger.debug("Quantity Details DataFrame:")
+    logger.debug(quantity_df.to_string())
+    st.dataframe(quantity_df)
+    
+    # Add overall summary metrics
+    if product_df['Total Quantity'].sum() > 0:
+        st.subheader("Quantity Summary")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            total_qty = product_df['Total Quantity'].sum()
+            st.metric("Total Overall Quantity", f"{total_qty:.0f}")
+        
+        with col2:
+            # Calculate overall average across products with quantities
+            avg_qty = product_df.loc[product_df['Mention Count'] > 0, 'Avg Quantity'].mean()
+            st.metric("Overall Average Quantity", f"{avg_qty:.2f}")
+        
+        with col3:
+            # Get overall maximum
+            max_qty = product_df['Max Quantity'].max()
+            st.metric("Overall Maximum Quantity", f"{max_qty:.0f}")
+    
+    # Sentence filtering section with corrected filter keys
+    st.subheader("Product Sentences")
+    
+    # Create a session state key to remember the selection
+    if 'product_selection' not in st.session_state:
+        st.session_state.product_selection = "All"
+    
+    # Use the session state for the selectbox default value
+    selected_product = st.selectbox(
+        "Select Product to View Sentences",
+        options=["All"] + product_names,
+        key="product_mentions_select",
+        index=0 if st.session_state.product_selection == "All" else 1 + product_names.index(st.session_state.product_selection)
+    )
+    
+    # Update session state
+    st.session_state.product_selection = selected_product
+    
+    # Modify filtering logic to use the correct filter keys
+    # With this:
+    filters = {}
+    if selected_product != "All":
+        # Convert product name to key format (remove spaces and lowercase)
+        product_key = selected_product.lower().replace(' ', '')
+        
+        # Based on the logs, the correct filter key is 'mentions_productname'
+        filter_key = f'mentions_{product_key}'
+        filters[filter_key] = True
+        
+        # Add debugging to check if this key exists in the sentences
+        if all_sentences and len(all_sentences) > 0:
+            sample_sentence = all_sentences[0]
+            key_exists = filter_key in sample_sentence
+            logger.debug(f"Filter key '{filter_key}' exists in sample sentence: {key_exists}")
+            logger.debug(f"Available keys in sample sentence: {list(sample_sentence.keys())}")
+        
+        logger.debug(f"Filtering with: {filters}")
+    
+    # Create a container for the filtered sentences to prevent page jumping
+    sentence_container = st.container()
+    
+    with sentence_container:
+        # Filter and display sentences
+        if filters:
+            # Check if filter keys exist in the sentence data
+            if all_sentences and len(all_sentences) > 0:
+                sample_keys = list(all_sentences[0].keys())
+                logger.debug(f"Available sentence keys: {sample_keys}")
+            
+            filtered_sentences = filter_sentences(all_sentences, filters)
+            
+            # Log how many sentences were found
+            logger.debug(f"Found {len(filtered_sentences)} sentences matching filters: {filters}")
+            
+            if len(filtered_sentences) == 0:
+                st.warning(f"No sentences found mentioning {selected_product}")
+            else:
+                st.success(f"Found {len(filtered_sentences)} sentences mentioning {selected_product}")
+                display_sentence_details(filtered_sentences)
+        else:
+            # If no filters, show all sentences
+            st.info("Showing all sentences")
+            display_sentence_details(all_sentences)
+
 def main():
     # Initialize session state
     if 'data' not in st.session_state:
@@ -616,9 +1441,12 @@ def main():
             'high_impact': None,
             'alignment': None,
             'info_impact': None,
+            'relevance_stats': None,
             'refresh_count': 0,
             'last_refresh_time': time.time(),
-            'data_loaded': False
+            'data_loaded': False,
+            'relevance_filter': 'all',  # Default to showing all sentences
+            'product_mentions': None  # Add this line
         }
     
     # Verify Redis caching
@@ -626,6 +1454,27 @@ def main():
 
     # Sidebar controls
     st.sidebar.title("Dashboard Controls")
+    
+    # Relevance filter in sidebar - changed to radio buttons for better UX
+    st.session_state.data['relevance_filter'] = st.sidebar.radio(
+        "Filter by Sales Funnel Relevance",
+        options=["All Sentences", "Relevant Only", "Non-Relevant Only"],
+        index=0,  # Default to "All Sentences"
+        key="sidebar_relevance_filter"
+    )
+    
+    # Map the selection to the actual filter value
+    relevance_filter_value = "all"
+    #if st.session_state.data['relevance_filter'] == "Relevant Only":
+    #    relevance_filter_value = "relevant"
+    #    include_non_relevant = False
+    #elif st.session_state.data['relevance_filter'] == "Non-Relevant Only":
+    #    relevance_filter_value = "non_relevant"
+    #    include_non_relevant = True
+    #else:
+    #    include_non_relevant = True
+    
+    # Rest of the sidebar controls
     auto_refresh = st.sidebar.checkbox("Enable auto-refresh", value=False)
     refresh_interval = st.sidebar.slider(
         "Refresh interval (seconds)",
@@ -636,7 +1485,7 @@ def main():
 
     # Main content
     st.title("Customer Interaction Analytics Dashboard")
-    st.write("Interactive analytics with client-side filtering for fast exploration")
+    #st.write("Interactive analytics with client-side filtering for fast exploration")
     
     # Check if data needs to be loaded/refreshed
     current_time = time.time()
@@ -659,10 +1508,14 @@ def main():
             st.info("⏳ Loading or refreshing dashboard data...")
             progress_bar = st.progress(0)
         
-        # Load all data
+        # Always load all sentences regardless of filter for maximum flexibility
         with st.spinner("Loading sentence data..."):
-            progress_bar.progress(25)
-            st.session_state.data['all_sentences'] = fetch_all_sentences()
+            progress_bar.progress(15)
+            # Load all sentences so we can filter client-side
+            st.session_state.data['all_sentences'] = fetch_all_sentences(include_non_relevant=True)
+            progress_bar.progress(30)
+            st.session_state.data['relevance_stats'] = fetch_relevance_stats()
+            progress_bar.progress(40)
         
         # Load analytics data
         with st.spinner("Loading analytics data..."):
@@ -670,16 +1523,18 @@ def main():
             st.session_state.data['sentiment_dist'] = fetch_data("sentiment-distribution", "ml_insights:sentiment_dist")
             progress_bar.progress(60)
             st.session_state.data['impact_scores'] = fetch_data("impact-scores", "ml_insights:impact_scores")
-            progress_bar.progress(70)
+            progress_bar.progress(65)
             st.session_state.data['sentiment_impact'] = fetch_data("sentiment-impact", "ml_insights:sentiment_impact")
-            progress_bar.progress(75)
+            progress_bar.progress(70)
             st.session_state.data['funnel_metrics'] = fetch_data("funnel-metrics", "ml_insights:funnel_metrics")
-            progress_bar.progress(80)
+            progress_bar.progress(75)
             st.session_state.data['intent_dist'] = fetch_data("intent-distribution", "ml_insights:intent_dist")
-            progress_bar.progress(85)
+            progress_bar.progress(80)
             st.session_state.data['high_impact'] = fetch_data("high-impact-sentiment", "ml_insights:high_impact")
-            progress_bar.progress(90)
+            progress_bar.progress(85)
             st.session_state.data['alignment'] = fetch_data("stage-intent-alignment", "ml_insights:alignment")
+            progress_bar.progress(90)
+            st.session_state.data['product_mentions'] = fetch_data("product-mentions", "ml_insights:product_mentions")
             progress_bar.progress(95)
             st.session_state.data['info_impact'] = fetch_data("impact-information", "ml_insights:info_impact")
             progress_bar.progress(100)
@@ -692,71 +1547,99 @@ def main():
     
     # Display loading status
     if st.session_state.data['all_sentences']:
-        st.success(f"✅ Data loaded successfully ({len(st.session_state.data['all_sentences'])} sentences)")
+        # Filter the sentences based on the global relevance filter
+        filtered_sentences = prepare_filtered_sentences(
+            st.session_state.data['all_sentences'], 
+            relevance_filter_value
+        )
+        
+        st.success(f"✅ Data loaded successfully ({len(filtered_sentences)} sentences)")
+        
     else:
         st.error("❌ Failed to load sentence data")
         st.stop()  # Stop execution if data loading failed
-        
+    
     # Create tabs for different visualizations
     tabs = st.tabs([
+        "Relevance Overview",
         "Sentiment Distribution",
         "Impact Scores",
         "Sentiment Impact",
         "Funnel Metrics",
         "Intent Distribution",
         "High Impact Sentiment",
-        "Stage Intent Alignment",
-        "Impact Information"
+        "Business Impact Information",
+        "Product Mentions"  # New tab
     ])
 
-    # Render each tab with cached data from session state
+    # Use the filtered sentences for all visualizations
+    filtered_sentences = prepare_filtered_sentences(
+        st.session_state.data['all_sentences'], 
+        relevance_filter_value
+    )
+
     with tabs[0]:
+        # Check if relevance_stats exists in session state before using it
+        if 'relevance_stats' in st.session_state.data and st.session_state.data['relevance_stats']:
+            render_relevance_stats(
+                st.session_state.data['relevance_stats'],
+                filtered_sentences
+            )
+        else:
+            st.warning("Sales funnel relevance statistics are not available. Please refresh the data.")
+        
+    with tabs[1]:
         render_sentiment_distribution(
             st.session_state.data['sentiment_dist'], 
-            st.session_state.data['all_sentences']
-        )
-
-    with tabs[1]:
-        render_impact_scores(
-            st.session_state.data['impact_scores'], 
-            st.session_state.data['all_sentences']
+            filtered_sentences
         )
 
     with tabs[2]:
-        render_sentiment_impact(
-            st.session_state.data['sentiment_impact'], 
-            st.session_state.data['all_sentences']
+        render_impact_scores(
+            st.session_state.data['impact_scores'], 
+            filtered_sentences
         )
 
     with tabs[3]:
-        render_funnel_metrics(
-            st.session_state.data['funnel_metrics'], 
-            st.session_state.data['all_sentences']
+        render_sentiment_impact(
+            st.session_state.data['sentiment_impact'], 
+            filtered_sentences
         )
 
     with tabs[4]:
-        render_intent_distribution(
-            st.session_state.data['intent_dist'], 
-            st.session_state.data['all_sentences']
+        render_funnel_metrics(
+            st.session_state.data['funnel_metrics'], 
+            filtered_sentences
         )
 
     with tabs[5]:
-        render_high_impact_sentiment(
-            st.session_state.data['high_impact'], 
-            st.session_state.data['all_sentences']
+        render_intent_distribution(
+            st.session_state.data['intent_dist'], 
+            filtered_sentences
         )
 
     with tabs[6]:
-        render_stage_intent_alignment(
-            st.session_state.data['alignment'], 
-            st.session_state.data['all_sentences']
+        render_high_impact_sentiment(
+            st.session_state.data['high_impact'], 
+            filtered_sentences
         )
 
     with tabs[7]:
         render_impact_information(
             st.session_state.data['info_impact'], 
-            st.session_state.data['all_sentences']
+            filtered_sentences
         )
+
+    # In the main tabs section, modify the Product Mentions tab
+    with tabs[8]:
+        # Use the pre-loaded product mentions data from session state
+        if st.session_state.data.get('product_mentions') is not None:
+            render_product_mentions(
+                st.session_state.data['product_mentions'], 
+                filtered_sentences
+            )
+        else:
+            st.warning("Product mentions data is not available. Please refresh the data.")
 
     # Display refresh information
     st.sidebar.write(f"Total Refreshes: {st.session_state.data['refresh_count']}")
@@ -767,6 +1650,6 @@ def main():
         st.session_state.data['refresh_count'] += 1
         logger.info(f"Auto-refresh triggered. Refresh count: {st.session_state.data['refresh_count']}")
         st.rerun()
-
+        
 if __name__ == "__main__":
     main()

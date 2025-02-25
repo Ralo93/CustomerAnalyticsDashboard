@@ -14,7 +14,7 @@ import numpy as np
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
@@ -60,6 +60,16 @@ class FeatureBase(BaseModelConfig):
     entity_count: Optional[int] = None
     sentiment_score: Optional[float] = None
     embedding_model: Optional[str] = None
+    
+    # Product mention fields
+    mentions_masterblaster: Optional[bool] = None
+    masterblaster_quantity: Optional[int] = None
+    
+    mentions_funpun: Optional[bool] = None
+    funpun_quantity: Optional[int] = None
+    
+    mentions_powerpro: Optional[bool] = None
+    powerpro_quantity: Optional[int] = None
 
 class FeatureCreate(FeatureBase):
     sentence_id: str
@@ -150,6 +160,8 @@ class FeatureResponse(FeatureBase):
 
 
 class LabelBase(BaseModelConfig):
+    is_sales_funnel_relevant: Optional[bool] = None
+    is_sales_funnel_relevant_confidence: Optional[float] = None
     sales_funnel_stage: Optional[str] = None
     sales_funnel_confidence: Optional[float] = None
     sentiment: Optional[str] = None
@@ -398,16 +410,47 @@ async def update_label(sentence_id: str, update_data: LabelUpdate, db: Session =
     db.refresh(label)
     return label
 
+@app.get("/analytics/sentiment-impact", response_model=List[SentimentImpactScore])
+async def get_sentiment_impact(
+    is_sales_funnel_relevant: Optional[bool] = None,
+    db: Session = Depends(get_db)
+):
+    """Get sentiment and business impact correlation with optional relevance filter"""
+    query = db.query(
+        models.SentenceLabel.sentiment,
+        models.SentenceLabel.business_impact,
+        func.count().label('count')
+    )
+    
+    # Apply relevance filter if provided
+    if is_sales_funnel_relevant is not None:
+        query = query.filter(models.SentenceLabel.is_sales_funnel_relevant == is_sales_funnel_relevant)
+    
+    results = query.group_by(
+        models.SentenceLabel.sentiment,
+        models.SentenceLabel.business_impact
+    ).all()
+    
+    return [
+        SentimentImpactScore(
+            sentiment=r.sentiment,
+            business_impact=r.business_impact,
+            count=r.count
+        ) for r in results
+    ]
 
 @app.get("/analytics/sentiment-distribution", response_model=List[SentimentDistribution])
 async def get_sentiment_distribution(db: Session = Depends(get_db)):
-    """Get sentiment distribution per sales funnel stage"""
+    """Get sentiment distribution per sales funnel stage for relevant sentences only"""
     results = db.query(
         models.SentenceLabel.sales_funnel_stage,
         func.count(case((models.SentenceLabel.sentiment == 'Positive', 1))).label('positive_count'),
         func.count(case((models.SentenceLabel.sentiment == 'Negative', 1))).label('negative_count'),
         func.count(case((models.SentenceLabel.sentiment == 'Neutral', 1))).label('neutral_count'),
         func.count().label('total_count')
+    ).filter(
+        models.SentenceLabel.is_sales_funnel_relevant == True,
+        models.SentenceLabel.sales_funnel_stage.isnot(None)
     ).group_by(
         models.SentenceLabel.sales_funnel_stage
     ).all()
@@ -421,9 +464,10 @@ async def get_sentiment_distribution(db: Session = Depends(get_db)):
             total_count=r.total_count
         ) for r in results
     ]
+
 @app.get("/analytics/impact-scores", response_model=List[ImpactScore])
 async def get_impact_scores(db: Session = Depends(get_db)):
-    """Get average impact scores per sales funnel stage"""
+    """Get average impact scores per sales funnel stage for relevant sentences only"""
     impact_mapping = {'Low': 1, 'Medium': 2, 'High': 3, 'Neutral': 1.5}
     
     # Create a list of tuples for the case statement
@@ -434,6 +478,9 @@ async def get_impact_scores(db: Session = Depends(get_db)):
         models.SentenceLabel.sales_funnel_stage,
         func.avg(case(*whens)).label('avg_impact'),
         func.count().label('count')
+    ).filter(
+        models.SentenceLabel.is_sales_funnel_relevant == True,
+        models.SentenceLabel.sales_funnel_stage.isnot(None)
     ).group_by(
         models.SentenceLabel.sales_funnel_stage
     ).all()
@@ -446,34 +493,21 @@ async def get_impact_scores(db: Session = Depends(get_db)):
         ) for r in results
     ]
 
-@app.get("/analytics/sentiment-impact", response_model=List[SentimentImpactScore])
-async def get_sentiment_impact(db: Session = Depends(get_db)):
-    """Get sentiment and business impact correlation"""
-    results = db.query(
-        models.SentenceLabel.sentiment,
-        models.SentenceLabel.business_impact,
-        func.count().label('count')
-    ).group_by(
-        models.SentenceLabel.sentiment,
-        models.SentenceLabel.business_impact
-    ).all()
-    
-    return [
-        SentimentImpactScore(
-            sentiment=r.sentiment,
-            business_impact=r.business_impact,
-            count=r.count
-        ) for r in results
-    ]
-
 @app.get("/analytics/funnel-metrics", response_model=List[FunnelMetrics])
 async def get_funnel_metrics(db: Session = Depends(get_db)):
-    """Get volume metrics for each funnel stage"""
-    total = db.query(func.count()).select_from(models.SentenceLabel).scalar()
+    """Get volume metrics for each funnel stage for relevant sentences only"""
+    # Only count funnel-relevant sentences for the total
+    total = db.query(func.count()).select_from(models.SentenceLabel).filter(
+        models.SentenceLabel.is_sales_funnel_relevant == True,
+        models.SentenceLabel.sales_funnel_stage.isnot(None)
+    ).scalar()
     
     results = db.query(
         models.SentenceLabel.sales_funnel_stage,
         func.count().label('count')
+    ).filter(
+        models.SentenceLabel.is_sales_funnel_relevant == True,
+        models.SentenceLabel.sales_funnel_stage.isnot(None)
     ).group_by(
         models.SentenceLabel.sales_funnel_stage
     ).all()
@@ -486,29 +520,9 @@ async def get_funnel_metrics(db: Session = Depends(get_db)):
         ) for r in results
     ]
 
-@app.get("/analytics/intent-distribution", response_model=List[IntentDistribution])
-async def get_intent_distribution(db: Session = Depends(get_db)):
-    """Get distribution of communication intents"""
-    total = db.query(func.count()).select_from(models.SentenceLabel).scalar()
-    
-    results = db.query(
-        models.SentenceLabel.intent,
-        func.count().label('count')
-    ).group_by(
-        models.SentenceLabel.intent
-    ).all()
-    
-    return [
-        IntentDistribution(
-            intent=r.intent,
-            count=r.count,
-            percentage=r.count / total * 100 if total > 0 else 0
-        ) for r in results
-    ]
-
 @app.get("/analytics/high-impact-sentiment", response_model=List[HighImpactSentiment])
 async def get_high_impact_positive_sentiment(db: Session = Depends(get_db)):
-    """Get high impact and positive sentiment distribution per stage"""
+    """Get high impact and positive sentiment distribution per stage for relevant sentences only"""
     results = db.query(
         models.SentenceLabel.sales_funnel_stage,
         func.count(
@@ -520,6 +534,9 @@ async def get_high_impact_positive_sentiment(db: Session = Depends(get_db)):
             )
         ).label('positive_high_impact_count'),
         func.count().label('total_count')
+    ).filter(
+        models.SentenceLabel.is_sales_funnel_relevant == True,
+        models.SentenceLabel.sales_funnel_stage.isnot(None)
     ).group_by(
         models.SentenceLabel.sales_funnel_stage
     ).all()
@@ -533,13 +550,137 @@ async def get_high_impact_positive_sentiment(db: Session = Depends(get_db)):
         ) for r in results
     ]
 
+@app.get("/analytics/general-sentiment-distribution")
+async def get_general_sentiment_distribution(
+    is_sales_funnel_relevant: Optional[bool] = None, 
+    db: Session = Depends(get_db)
+):
+    """Get sentiment distribution for all sentences with optional relevance filter"""
+    query = db.query(
+        models.SentenceLabel.sentiment,
+        func.count().label('count')
+    )
+    
+    # Apply relevance filter if provided
+    if is_sales_funnel_relevant is not None:
+        query = query.filter(models.SentenceLabel.is_sales_funnel_relevant == is_sales_funnel_relevant)
+    
+    results = query.group_by(
+        models.SentenceLabel.sentiment
+    ).all()
+    
+    total = sum(r.count for r in results)
+    
+    return [
+        {
+            "sentiment": r.sentiment,
+            "count": r.count,
+            "percentage": r.count / total * 100 if total > 0 else 0
+        } for r in results
+    ]
+@app.get("/analytics/intent-distribution", response_model=List[IntentDistribution])
+async def get_intent_distribution(
+    is_sales_funnel_relevant: Optional[bool] = None,
+    db: Session = Depends(get_db)
+):
+    """Get distribution of communication intents with optional relevance filter"""
+    query = db.query(
+        models.SentenceLabel.intent,
+        func.count().label('count')
+    )
+    
+    # By default, show only non-relevant items
+    if is_sales_funnel_relevant is None:
+        # Default to non-relevant if parameter is not provided
+        query = query.filter(models.SentenceLabel.is_sales_funnel_relevant == False)
+    else:
+        # If parameter is explicitly provided, use that value
+        query = query.filter(models.SentenceLabel.is_sales_funnel_relevant == is_sales_funnel_relevant)
+    
+    # Complete the query
+    results = query.group_by(
+        models.SentenceLabel.intent
+    ).all()
+    
+    total = sum(r.count for r in results)
+    
+    return [
+        IntentDistribution(
+            intent=r.intent,
+            count=r.count,
+            percentage=r.count / total * 100 if total > 0 else 0
+        ) for r in results
+    ]
+
+@app.get("/analytics/business-impact-distribution")
+async def get_business_impact_distribution(
+    is_sales_funnel_relevant: Optional[bool] = None,
+    db: Session = Depends(get_db)
+):
+    """Get distribution of business impact with optional relevance filter"""
+    query = db.query(
+        models.SentenceLabel.business_impact,
+        func.count().label('count')
+    )
+    
+    # Apply relevance filter if provided
+    if is_sales_funnel_relevant is not None:
+        query = query.filter(models.SentenceLabel.is_sales_funnel_relevant == is_sales_funnel_relevant)
+    
+    results = query.group_by(
+        models.SentenceLabel.business_impact
+    ).all()
+    
+    total = sum(r.count for r in results)
+    
+    return [
+        {
+            "business_impact": r.business_impact,
+            "count": r.count,
+            "percentage": r.count / total * 100 if total > 0 else 0
+        } for r in results
+    ]
+@app.get("/analytics/impact-information", response_model=List[ImpactInformation])
+async def get_impact_information(
+    is_sales_funnel_relevant: Optional[bool] = None,
+    db: Session = Depends(get_db)
+):
+    """Get relationship between information type and business impact with optional relevance filter"""
+    query = db.query(
+        models.SentenceLabel.intent.label('information_type'),
+        models.SentenceLabel.business_impact,
+        func.count().label('count')
+    ).filter(
+        models.SentenceLabel.intent.in_(['Information', 'Feedback', 'Support'])
+    )
+    
+    # Apply relevance filter if provided
+    if is_sales_funnel_relevant is not None:
+        query = query.filter(models.SentenceLabel.is_sales_funnel_relevant == is_sales_funnel_relevant)
+    
+    results = query.group_by(
+        models.SentenceLabel.intent,
+        models.SentenceLabel.business_impact
+    ).all()
+    
+    return [
+        ImpactInformation(
+            information_type=r.information_type,
+            business_impact=r.business_impact,
+            count=r.count
+        ) for r in results
+    ]
+
 @app.get("/analytics/stage-intent-alignment", response_model=List[StageIntentAlignment])
 async def get_stage_intent_alignment(db: Session = Depends(get_db)):
-    """Get alignment between sales funnel stages and intents"""
+    """Get alignment between sales funnel stages and intents for relevant sentences only"""
     results = db.query(
         models.SentenceLabel.sales_funnel_stage,
         models.SentenceLabel.intent,
         func.count().label('count')
+    ).filter(
+        models.SentenceLabel.is_sales_funnel_relevant == True,
+        models.SentenceLabel.sales_funnel_stage.isnot(None)
     ).group_by(
         models.SentenceLabel.sales_funnel_stage,
         models.SentenceLabel.intent
@@ -564,37 +705,14 @@ async def get_stage_intent_alignment(db: Session = Depends(get_db)):
         ) for r in results
     ]
 
-@app.get("/analytics/impact-information", response_model=List[ImpactInformation])
-async def get_impact_information(db: Session = Depends(get_db)):
-    """Get relationship between information type and business impact"""
-    results = db.query(
-        models.SentenceLabel.intent,
-        models.SentenceLabel.business_impact,
-        func.count().label('count')
-    ).filter(
-        models.SentenceLabel.intent.in_(['Information', 'Feedback', 'Support'])
-    ).group_by(
-        models.SentenceLabel.intent,
-        models.SentenceLabel.business_impact
-    ).all()
-    
-    return [
-        ImpactInformation(
-            information_type=r.intent,
-            business_impact=r.business_impact,
-            count=r.count
-        ) for r in results
-    ]
-
-
-# New endpoint to fetch sentences with specific filter criteria
 @app.get("/analytics/sentences-by-filter")
 async def get_sentences_by_filter(
     sales_funnel_stage: Optional[str] = None,
     sentiment: Optional[str] = None,
     business_impact: Optional[str] = None,
     intent: Optional[str] = None,
-    limit: int = sys.maxsize,  # Using the maximum integer size
+    is_sales_funnel_relevant: Optional[bool] = None,
+    limit: int = sys.maxsize,
     db: Session = Depends(get_db)
 ):
     """Fetch sentences matching specific filter criteria"""
@@ -603,8 +721,17 @@ async def get_sentences_by_filter(
     )
     
     # Apply filters
+    if is_sales_funnel_relevant is not None:
+        query = query.filter(models.SentenceLabel.is_sales_funnel_relevant == is_sales_funnel_relevant)
+    
+    # Only filter by sales_funnel_stage if the sentence is relevant to the sales funnel
     if sales_funnel_stage:
-        query = query.filter(models.SentenceLabel.sales_funnel_stage == sales_funnel_stage)
+        query = query.filter(
+            models.SentenceLabel.is_sales_funnel_relevant == True,
+            models.SentenceLabel.sales_funnel_stage == sales_funnel_stage
+        )
+    
+    # Apply other filters
     if sentiment:
         query = query.filter(models.SentenceLabel.sentiment == sentiment)
     if business_impact:
@@ -626,7 +753,8 @@ async def get_sentences_by_filter(
             "id": sentence.id,
             "text": sentence.text,
             "created_at": sentence.created_at,
-            "sales_funnel_stage": label.sales_funnel_stage if label else None,
+            "is_sales_funnel_relevant": label.is_sales_funnel_relevant if label else None,
+            "sales_funnel_stage": label.sales_funnel_stage if label and label.is_sales_funnel_relevant else None,
             "sentiment": label.sentiment if label else None,
             "business_impact": label.business_impact if label else None,
             "intent": label.intent if label else None
@@ -635,25 +763,34 @@ async def get_sentences_by_filter(
     return results
 
 @app.get("/analytics/all-sentences")
-async def get_all_sentences(limit: int = 1000, db: Session = Depends(get_db)):
+async def get_all_sentences(
+    include_non_relevant: bool = True,
+    limit: int = 1000, 
+    db: Session = Depends(get_db)
+):
     """Fetch all sentences with their label data for client-side filtering
     
-    This endpoint returns all sentences with their associated labels in a single call,
-    allowing for client-side filtering without multiple API calls.
-    
     Args:
+        include_non_relevant: Whether to include sentences not relevant to sales funnel
         limit: Maximum number of sentences to return (default: 1000)
         db: Database session
         
     Returns:
         List of sentence objects with their label data
     """
-    # Query sentences with labels, ordered by newest first
+    # Start query
     query = db.query(models.Sentence).join(
         models.SentenceLabel, models.Sentence.id == models.SentenceLabel.sentence_id
-    ).order_by(models.Sentence.created_at.desc()).limit(limit)
+    ).outerjoin(  # Use outer join in case some sentences don't have features
+        models.SentenceFeatures, models.Sentence.id == models.SentenceFeatures.sentence_id
+    )
     
-    sentences = query.all()
+    # Apply relevance filter if requested
+    if not include_non_relevant:
+        query = query.filter(models.SentenceLabel.is_sales_funnel_relevant == True)
+    
+    # Finish query
+    sentences = query.order_by(models.Sentence.created_at.desc()).limit(limit).all()
     
     # Build response with sentence and label data combined
     results = []
@@ -661,24 +798,187 @@ async def get_all_sentences(limit: int = 1000, db: Session = Depends(get_db)):
         label = db.query(models.SentenceLabel).filter(
             models.SentenceLabel.sentence_id == sentence.id
         ).first()
+
+                # Get feature data for this sentence including product mentions
+        features = db.query(models.SentenceFeatures).filter(
+            models.SentenceFeatures.sentence_id == sentence.id
+        ).first()
         
         if label:
+            # Only include sales_funnel_stage if the sentence is relevant
+            sales_funnel_stage = label.sales_funnel_stage if label.is_sales_funnel_relevant else None
+            sales_funnel_confidence = label.sales_funnel_confidence if label.is_sales_funnel_relevant else None
+            
             results.append({
                 "id": sentence.id,
                 "text": sentence.text,
                 "created_at": sentence.created_at.isoformat(),
-                "sales_funnel_stage": label.sales_funnel_stage,
+                "is_sales_funnel_relevant": label.is_sales_funnel_relevant,
+                "is_sales_funnel_relevant_confidence": label.is_sales_funnel_relevant_confidence,
+                "sales_funnel_stage": sales_funnel_stage,
+                "sales_funnel_confidence": sales_funnel_confidence,
                 "sentiment": label.sentiment,
-                "business_impact": label.business_impact,
-                "intent": label.intent,
-                # Add any other relevant fields
-                "sales_funnel_confidence": label.sales_funnel_confidence,
                 "sentiment_confidence": label.sentiment_confidence,
+                "business_impact": label.business_impact,
+                "business_impact_confidence": label.business_impact_confidence,
+                "intent": label.intent,
                 "intent_confidence": label.intent_confidence,
-                "business_impact_confidence": label.business_impact_confidence
+                "mentions_masterblaster": features.mentions_masterblaster if features else False,
+                "mentions_funpun": features.mentions_funpun if features else False,
+                "mentions_powerpro": features.mentions_powerpro if features else False,
             })
     
     return results
+
+# New endpoint to get sales funnel relevance statistics
+@app.get("/analytics/sales-funnel-relevance")
+async def get_sales_funnel_relevance(db: Session = Depends(get_db)):
+    """Get statistics about sales funnel relevance of sentences"""
+    
+    # Get total count
+    total = db.query(func.count()).select_from(models.SentenceLabel).scalar()
+    
+    # Get relevant count
+    relevant = db.query(func.count()).select_from(models.SentenceLabel).filter(
+        models.SentenceLabel.is_sales_funnel_relevant == True
+    ).scalar()
+    
+    # Get non-relevant count
+    non_relevant = db.query(func.count()).select_from(models.SentenceLabel).filter(
+        models.SentenceLabel.is_sales_funnel_relevant == False
+    ).scalar()
+    
+    # Get count without classification
+    unclassified = db.query(func.count()).select_from(models.SentenceLabel).filter(
+        models.SentenceLabel.is_sales_funnel_relevant.is_(None)
+    ).scalar()
+    
+    return {
+        "total_sentences": total,
+        "sales_funnel_relevant": relevant,
+        "non_sales_funnel_relevant": non_relevant,
+        "unclassified": unclassified,
+        "relevant_percentage": (relevant / total * 100) if total > 0 else 0,
+        "non_relevant_percentage": (non_relevant / total * 100) if total > 0 else 0,
+        "unclassified_percentage": (unclassified / total * 100) if total > 0 else 0
+    }
+
+@app.get("/analytics/product-mentions")
+async def get_product_mentions(
+    is_sales_funnel_relevant: Optional[bool] = None,
+    db: Session = Depends(get_db)
+):
+    
+    # First, log raw data for diagnostic purposes
+    raw_features = db.query(models.SentenceFeatures).all()
+    
+    logger.debug("Raw SentenceFeatures data:")
+    for feature in raw_features:
+        logger.debug(f"Sentence ID: {feature.sentence_id}")
+        logger.debug(f"MasterBlaster Mentions: {feature.mentions_masterblaster}, Quantity: {feature.masterblaster_quantity}")
+        logger.debug(f"FunPun Mentions: {feature.mentions_funpun}, Quantity: {feature.funpun_quantity}")
+        logger.debug(f"PowerPro Mentions: {feature.mentions_powerpro}, Quantity: {feature.powerpro_quantity}")
+    
+    """Get lightweight statistics about product mentions in sentences"""
+    query = db.query(
+        func.count(models.Sentence.id).label('total_sentences'),
+        func.sum(case(
+            (models.SentenceFeatures.mentions_masterblaster == True, 1), 
+            else_=0
+        )).label('masterblaster_mentions'),
+        func.sum(case(
+            (models.SentenceFeatures.mentions_funpun == True, 1), 
+            else_=0
+        )).label('funpun_mentions'),
+        func.sum(case(
+            (models.SentenceFeatures.mentions_powerpro == True, 1), 
+            else_=0
+        )).label('powerpro_mentions'),
+        func.sum(case(
+            ((models.SentenceFeatures.mentions_masterblaster == True) | 
+             (models.SentenceFeatures.mentions_funpun == True) | 
+             (models.SentenceFeatures.mentions_powerpro == True), 1),
+            else_=0
+        )).label('sentences_with_products'),
+        func.sum(case(
+            (((models.SentenceFeatures.mentions_masterblaster == True) and 
+              (models.SentenceFeatures.mentions_funpun == True or models.SentenceFeatures.mentions_powerpro == True)) or
+             ((models.SentenceFeatures.mentions_funpun == True) and 
+              (models.SentenceFeatures.mentions_masterblaster == True or models.SentenceFeatures.mentions_powerpro == True)) or
+             ((models.SentenceFeatures.mentions_powerpro == True) and 
+              (models.SentenceFeatures.mentions_masterblaster == True or models.SentenceFeatures.mentions_funpun == True)),
+            1),
+            else_=0
+        )).label('multiple_product_mentions'),
+        # Sum the quantity fields, converting nulls to 0 using func.coalesce
+        func.sum(case(
+            (models.SentenceFeatures.mentions_masterblaster == True,
+             func.coalesce(models.SentenceFeatures.masterblaster_quantity, 0)),
+            else_=0
+        )).label('masterblaster_quantity'),
+        func.sum(case(
+            (models.SentenceFeatures.mentions_funpun == True,
+             func.coalesce(models.SentenceFeatures.funpun_quantity, 0)),
+            else_=0
+        )).label('funpun_quantity'),
+        func.sum(case(
+            (models.SentenceFeatures.mentions_powerpro == True,
+             func.coalesce(models.SentenceFeatures.powerpro_quantity, 0)),
+            else_=0
+        )).label('powerpro_quantity'),
+    ).join(
+        models.SentenceFeatures, 
+        models.Sentence.id == models.SentenceFeatures.sentence_id
+    )
+    
+    if is_sales_funnel_relevant is not None:
+        query = query.join(
+            models.SentenceLabel,
+            models.Sentence.id == models.SentenceLabel.sentence_id
+        ).filter(
+            models.SentenceLabel.is_sales_funnel_relevant == is_sales_funnel_relevant
+        )
+    
+    result = query.first()
+
+        # Log the raw query result for debugging
+    logger.debug(f"Raw query result: {result}")
+    
+    if not result:
+        return {
+            "total_sentences": 0,
+            "with_any_product_mention": 0,
+            "with_multiple_products": 0,
+            "masterblaster": {"mention_count": 0, "quantity": 0, "percentage": 0},
+            "funpun": {"mention_count": 0, "quantity": 0, "percentage": 0},
+            "powerpro": {"mention_count": 0, "quantity": 0, "percentage": 0}
+        }
+    
+    total_sentences = result.total_sentences or 0
+    
+    product_stats = {
+        "total_sentences": total_sentences,
+        "with_any_product_mention": result.sentences_with_products or 0,
+        "with_multiple_products": result.multiple_product_mentions or 0,
+        "masterblaster": {
+            "mention_count": result.masterblaster_mentions or 0,
+            "quantity": result.masterblaster_quantity or 0,
+            "percentage": (result.masterblaster_mentions / total_sentences * 100) if total_sentences > 0 else 0
+        },
+        "funpun": {
+            "mention_count": result.funpun_mentions or 0,
+            "quantity": result.funpun_quantity or 0,
+            "percentage": (result.funpun_mentions / total_sentences * 100) if total_sentences > 0 else 0
+        },
+        "powerpro": {
+            "mention_count": result.powerpro_mentions or 0,
+            "quantity": result.powerpro_quantity or 0,
+            "percentage": (result.powerpro_mentions / total_sentences * 100) if total_sentences > 0 else 0
+        }
+    }
+    
+    return product_stats
+
 
 @app.get("/health")
 async def health_check():
