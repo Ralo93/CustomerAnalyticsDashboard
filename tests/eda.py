@@ -1,21 +1,6 @@
 #!/usr/bin/env python
 """
 EDA and Visualization Script for ML Insights Database
-
-This script connects to the database, extracts data from:
-  - sentences
-  - sentence_labels
-  - sentence_features
-
-It then creates several interactive visualizations using Plotly:
-  • Sentiment distribution by sales funnel stage (grouped bar chart)
-  • Product mentions count (bar chart)
-  • Distribution of word counts (histogram)
-  • Time series trend of sentence creation (line chart)
-  • (Optional) Business impact and intent distributions
-
-Before running, ensure the DATABASE_URL environment variable is set
-or update the default connection string below.
 """
 
 import os
@@ -23,6 +8,7 @@ import uuid
 from datetime import datetime
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
 from sqlalchemy import create_engine, Column, String, Float, DateTime, Integer, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
@@ -156,97 +142,306 @@ def load_data():
 
 
 # -------------------------
+# Helper Functions
+# -------------------------
+
+def save_fig(fig, filename):
+    """Save figure to HTML and optionally to image formats."""
+    # Ensure figures directory exists
+    os.makedirs("figures", exist_ok=True)
+    
+    # Save as interactive HTML
+    html_path = f"figures/{filename}.html"
+    fig.write_html(html_path, include_plotlyjs='cdn')
+    print(f"Saved interactive figure to {html_path}")
+
+
+# -------------------------
 # Visualization Functions
 # -------------------------
 
 def plot_sentiment_by_funnel(df):
     """Bar chart: Sentiment distribution grouped by sales funnel stage."""
     # Filter for rows with a defined sales funnel stage
-    df_stage = df[df["sales_funnel_stage"].notnull()]
+    df_stage = df[df["sales_funnel_stage"].notna()]
+    
     # Group and count sentiments per funnel stage
     sentiment_counts = (
         df_stage.groupby(["sales_funnel_stage", "sentiment"])
         .size()
         .reset_index(name="count")
     )
+    
+    # Create the figure with simple styling
     fig = px.bar(
         sentiment_counts,
         x="sales_funnel_stage",
         y="count",
         color="sentiment",
         barmode="group",
-        title="Sentiment Distribution by Sales Funnel Stage"
+        title="Sentiment by Sales Funnel Stage",
+        labels={
+            "sales_funnel_stage": "Sales Funnel Stage",
+            "count": "Count",
+            "sentiment": "Sentiment"
+        },
+        color_discrete_map={
+            "Positive": "green",
+            "Neutral": "gray",
+            "Negative": "red"
+        }
     )
-    fig.show()
+    
+    # Add simple formatting with larger fonts
+    fig.update_layout(
+        title=dict(
+            text="Sentiment by Sales Funnel Stage",
+            font=dict(size=24)
+        ),
+        xaxis=dict(
+            title="Sales Funnel Stage",
+            title_font=dict(size=18),
+            tickfont=dict(size=16)
+        ),
+        yaxis=dict(
+            title="Count",
+            title_font=dict(size=18),
+            tickfont=dict(size=16)
+        ),
+        legend=dict(
+            title="Sentiment",
+            font=dict(size=16)
+        ),
+        height=600,
+        width=900
+    )
+    
+    # Save and show
+    save_fig(fig, "sentiment_by_funnel")
+    return fig
 
 
 def plot_product_mentions(df):
-    """Bar chart: Count of product mentions for each product."""
+    """Simple bar chart: Count of product mentions for each product."""
     product_counts = {
         "MasterBlaster": df["mentions_masterblaster"].sum(),
         "FunPun": df["mentions_funpun"].sum(),
         "PowerPro": df["mentions_powerpro"].sum()
     }
     prod_df = pd.DataFrame(list(product_counts.items()), columns=["Product", "Mentions"])
+    
+    # Create the figure with simple styling
     fig = px.bar(
         prod_df,
         x="Product",
         y="Mentions",
-        title="Product Mentions Count"
+        title="Product Mentions",
+        text="Mentions"  # Show values on bars
     )
-    fig.show()
+    
+    # Add simple formatting with larger fonts
+    fig.update_layout(
+        title=dict(
+            text="Product Mentions",
+            font=dict(size=24)
+        ),
+        xaxis=dict(
+            title="Product",
+            title_font=dict(size=18),
+            tickfont=dict(size=16)
+        ),
+        yaxis=dict(
+            title="Count",
+            title_font=dict(size=18),
+            tickfont=dict(size=16)
+        ),
+        height=500,
+        width=800
+    )
+    
+    # Position text above bars
+    fig.update_traces(textposition="outside")
+    
+    # Save and show
+    save_fig(fig, "product_mentions")
+    return fig
 
 
 def plot_word_count_distribution(df):
     """Histogram: Distribution of word counts in sentences."""
     # Drop any missing values
+    df_word = df.dropna(subset=["word_count"])
+    
+    # Create the figure with simple styling
     fig = px.histogram(
-        df.dropna(subset=["word_count"]),
+        df_word,
         x="word_count",
-        nbins=30,
-        title="Distribution of Word Count in Sentences"
+        nbins=20,
+        title="Word Count Distribution",
+        labels={"word_count": "Words per Sentence", "count": "Frequency"}
     )
-    fig.show()
-
-
-def plot_time_series_sentences(df):
-    """Line chart: Number of sentences created over time."""
-    # Convert created_at to datetime.date
-    df["date"] = pd.to_datetime(df["created_at"]).dt.date
-    date_counts = df.groupby("date").size().reset_index(name="count")
-    fig = px.line(
-        date_counts,
-        x="date",
-        y="count",
-        title="Number of Sentences over Time"
+    
+    # Add simple formatting with larger fonts
+    fig.update_layout(
+        title=dict(
+            text="Word Count Distribution",
+            font=dict(size=24)
+        ),
+        xaxis=dict(
+            title="Words per Sentence",
+            title_font=dict(size=18),
+            tickfont=dict(size=16)
+        ),
+        yaxis=dict(
+            title="Frequency",
+            title_font=dict(size=18),
+            tickfont=dict(size=16)
+        ),
+        height=500,
+        width=800
     )
-    fig.show()
+    
+    # Save and show
+    save_fig(fig, "word_count_distribution")
+    return fig
 
 
 def plot_business_impact_distribution(df):
-    """Pie chart: Distribution of business impact values."""
-    impact_counts = df["business_impact"].value_counts().reset_index()
+    """Bar chart: Distribution of business impact values (avoiding pie chart issues)."""
+    # Skip null values
+    df_impact = df[df["business_impact"].notna()]
+    
+    # Count occurrences of each impact level
+    impact_counts = df_impact["business_impact"].value_counts().reset_index()
     impact_counts.columns = ["Business Impact", "Count"]
-    fig = px.pie(
+    
+    # Use a simple bar chart instead of a pie chart
+    fig = px.bar(
         impact_counts,
-        names="Business Impact",
-        values="Count",
-        title="Business Impact Distribution"
+        x="Business Impact",
+        y="Count",
+        title="Business Impact Distribution",
+        text="Count"  # Show values on bars
     )
-    fig.show()
+    
+    # Add simple formatting with larger fonts
+    fig.update_layout(
+        title=dict(
+            text="Business Impact Distribution",
+            font=dict(size=24)
+        ),
+        xaxis=dict(
+            title="Business Impact",
+            title_font=dict(size=18),
+            tickfont=dict(size=16)
+        ),
+        yaxis=dict(
+            title="Count",
+            title_font=dict(size=18),
+            tickfont=dict(size=16)
+        ),
+        height=500,
+        width=800
+    )
+    
+    # Position text above bars
+    fig.update_traces(textposition="outside")
+    
+    # Save and show
+    save_fig(fig, "business_impact_distribution")
+    return fig
+
+
+def plot_sales_funnel_classification(df):
+    """Bar chart: Distribution of sales funnel stages."""
+    # Filter for rows with a defined sales funnel stage
+    df_funnel = df[df["sales_funnel_stage"].notna()]
+    
+    # Count by funnel stage
+    funnel_counts = df_funnel["sales_funnel_stage"].value_counts().reset_index()
+    funnel_counts.columns = ["Stage", "Count"]
+    
+    # Create the figure with simple styling (as a bar chart for simplicity)
+    fig = px.bar(
+        funnel_counts,
+        x="Stage",
+        y="Count",
+        title="Sales Funnel Classification",
+        text="Count"  # Show values on bars
+    )
+    
+    # Add simple formatting with larger fonts
+    fig.update_layout(
+        title=dict(
+            text="Sales Funnel Classification",
+            font=dict(size=24)
+        ),
+        xaxis=dict(
+            title="Sales Funnel Stage",
+            title_font=dict(size=18),
+            tickfont=dict(size=16)
+        ),
+        yaxis=dict(
+            title="Count",
+            title_font=dict(size=18),
+            tickfont=dict(size=16)
+        ),
+        height=500,
+        width=800
+    )
+    
+    # Position text above bars
+    fig.update_traces(textposition="outside")
+    
+    # Save and show
+    save_fig(fig, "sales_funnel_classification")
+    return fig
 
 
 def plot_intent_distribution(df):
     """Bar chart: Distribution of communication intents."""
-    intent_counts = df["intent"].value_counts().reset_index()
+    # Skip null values
+    df_intent = df[df["intent"].notna()]
+    
+    # Count occurrences of each intent
+    intent_counts = df_intent["intent"].value_counts().reset_index()
     intent_counts.columns = ["Intent", "Count"]
+    
+    # Create a simple bar chart
     fig = px.bar(
         intent_counts,
         x="Intent",
         y="Count",
-        title="Intent Distribution"
+        title="Intent Distribution",
+        text="Count"  # Show values on bars
     )
-    fig.show()
+    
+    # Add simple formatting with larger fonts
+    fig.update_layout(
+        title=dict(
+            text="Intent Distribution",
+            font=dict(size=24)
+        ),
+        xaxis=dict(
+            title="Intent",
+            title_font=dict(size=18),
+            tickfont=dict(size=16)
+        ),
+        yaxis=dict(
+            title="Count",
+            title_font=dict(size=18),
+            tickfont=dict(size=16)
+        ),
+        height=500,
+        width=800
+    )
+    
+    # Position text above bars
+    fig.update_traces(textposition="outside")
+    
+    # Save and show
+    save_fig(fig, "intent_distribution")
+    return fig
 
 
 # -------------------------
@@ -261,24 +456,35 @@ def main():
     # Preview the DataFrame
     print(df.head())
     
-    # Create visualizations
+    # Create directory for figures if it doesn't exist
+    os.makedirs("figures", exist_ok=True)
+    
+    # Create and save visualizations
+    print("Plotting sales funnel classification...")
+    fig_funnel = plot_sales_funnel_classification(df)
+    fig_funnel.show()
+    
     print("Plotting sentiment distribution by sales funnel stage...")
-    plot_sentiment_by_funnel(df)
+    fig1 = plot_sentiment_by_funnel(df)
+    fig1.show()
     
     print("Plotting product mentions...")
-    plot_product_mentions(df)
+    fig2 = plot_product_mentions(df)
+    fig2.show()
     
     print("Plotting word count distribution...")
-    plot_word_count_distribution(df)
-    
-    #print("Plotting time series of sentence creation...")
-    #plot_time_series_sentences(df)
+    fig3 = plot_word_count_distribution(df)
+    fig3.show()
     
     print("Plotting business impact distribution...")
-    plot_business_impact_distribution(df)
+    fig5 = plot_business_impact_distribution(df)
+    fig5.show()
     
     print("Plotting intent distribution...")
-    plot_intent_distribution(df)
+    fig6 = plot_intent_distribution(df)
+    fig6.show()
+    
+    print("All visualizations complete. Check the 'figures' directory for saved outputs.")
 
 
 if __name__ == "__main__":
