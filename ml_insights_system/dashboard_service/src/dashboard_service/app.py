@@ -13,11 +13,15 @@ import json
 import numpy as np
 from typing import Dict, Optional, List
 
+
+
+
 # Keep existing logging setup
 def setup_logging():
     os.makedirs('logs', exist_ok=True)
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
+
     
     logging.basicConfig(
         level=logging.INFO,
@@ -34,6 +38,7 @@ def setup_logging():
     return logging.getLogger(__name__)
 
 logger = setup_logging()
+logger.setLevel(logging.INFO)
 load_dotenv()
 
 # Configuration
@@ -1304,7 +1309,7 @@ def render_product_mentions(df, all_sentences):
     """Visualize product mention statistics with enhanced filtering"""
     # Setup logging
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
+    
 
     # Log the raw input data
     logger.debug(f"Raw input data type: {type(df)}")
@@ -2273,6 +2278,7 @@ def render_trends_tab():
         
         # Display the chart
         st.altair_chart(funnel_chart, use_container_width=True)
+
 def main():
     # Initialize session state
     if 'data' not in st.session_state:
@@ -2404,16 +2410,16 @@ def main():
         st.error("❌ Failed to load sentence data")
         st.stop()  # Stop execution if data loading failed
     
-    # Create tabs for different visualizations
+    # Create tabs for different visualizations with new order
     tabs = st.tabs([
         "Relevance Overview",
-        "Sentiment Distribution",
-        "Impact Scores",
-        "Sentiment Impact",
         "Funnel Metrics",
+        "Sentiment Distribution",
         "Intent Distribution",
         "High Impact Sentiment",
+        "Sentiment Impact",
         "Business Impact Information",
+        "Impact Scores",
         "Product Mentions",
         "Time Series Trends" 
     ])
@@ -2435,48 +2441,47 @@ def main():
             st.warning("Sales funnel relevance statistics are not available. Please refresh the data.")
         
     with tabs[1]:
-        render_sentiment_distribution(
-            st.session_state.data['sentiment_dist'], 
-            filtered_sentences
-        )
-
-    with tabs[2]:
-        render_impact_scores(
-            st.session_state.data['impact_scores'], 
-            filtered_sentences
-        )
-
-    with tabs[3]:
-        render_sentiment_impact(
-            st.session_state.data['sentiment_impact'], 
-            filtered_sentences
-        )
-
-    with tabs[4]:
         render_funnel_metrics(
             st.session_state.data['funnel_metrics'], 
             filtered_sentences
         )
 
-    with tabs[5]:
+    with tabs[2]:
+        render_sentiment_distribution(
+            st.session_state.data['sentiment_dist'], 
+            filtered_sentences
+        )
+
+    with tabs[3]:
         render_intent_distribution(
             st.session_state.data['intent_dist'], 
             filtered_sentences
         )
 
-    with tabs[6]:
+    with tabs[4]:
         render_high_impact_sentiment(
             st.session_state.data['high_impact'], 
             filtered_sentences
         )
 
-    with tabs[7]:
+    with tabs[5]:
+        render_sentiment_impact(
+            st.session_state.data['sentiment_impact'], 
+            filtered_sentences
+        )
+
+    with tabs[6]:
         render_impact_information(
             st.session_state.data['info_impact'], 
             filtered_sentences
         )
 
-    # In the main tabs section, modify the Product Mentions tab
+    with tabs[7]:
+        render_impact_scores(
+            st.session_state.data['impact_scores'], 
+            filtered_sentences
+        )
+
     with tabs[8]:
         # Use the pre-loaded product mentions data from session state
         if st.session_state.data.get('product_mentions') is not None:
@@ -2487,7 +2492,7 @@ def main():
         else:
             st.warning("Product mentions data is not available. Please refresh the data.")
             
-    # Add the new Time Series Trends tab
+    # Add the Time Series Trends tab
     with tabs[9]:
         render_trends_tab()
 
