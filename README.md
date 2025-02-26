@@ -38,6 +38,10 @@ mindmap
       Medium
       Neutral
 ```
+%% Simple GitHub-friendly styling
+classDef default fill:#f9f9f9,stroke:#999,stroke-width:1px,color:#333
+classDef root fill:#6f42c1,color:white,stroke:#5a32a3
+
 
 ## Sneak 
 
@@ -57,9 +61,6 @@ mindmap
 ![newplot (1)](https://github.com/user-attachments/assets/b41825f1-48d9-4dd7-9f23-0e283b2e5e2a)
 
 
-%% Simple GitHub-friendly styling
-classDef default fill:#f9f9f9,stroke:#999,stroke-width:1px,color:#333
-classDef root fill:#6f42c1,color:white,stroke:#5a32a3
 
 
 ## Architecture Diagram
