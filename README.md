@@ -131,7 +131,7 @@ The system architecture is visualized in the following diagram:
 
 ## Future Enhancements
 
-1. Add support for multiple AI service providers
+1. Add service specific databases and db_services
 2. Implement more sophisticated caching strategies
 3. Add real-time processing capabilities
 4. Expand dashboard functionality with additional visualization options
