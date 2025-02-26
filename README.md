@@ -135,7 +135,7 @@ classDiagram
 5. Deployment ready architecture
 6. Fast Iteration using Customer Feedback and an imperfect MVP
 
-I need an architecture which is fast, can handle changing requirements, can be scaled and is cheap. I want to iterate quickly to pivot into better product strategies.
+I need an architecture which is fast, can handle changing requirements, can be scaled and is cheap. I want to iterate quickly to pivot into better product strategies if necessary.
 So I came up with the following architecture for an MVP:
 
 - Input: Sentences
