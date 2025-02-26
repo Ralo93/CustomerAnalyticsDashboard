@@ -6,7 +6,7 @@ This document describes the architecture of my data processing and visualization
 
 ## Classification Targets
 
-To make sense of the provided sentences, I extracted features and provided labels in the form of classifications. Lets start with the classifications first.
+To make sense of the provided sentences, I extracted features and provided labels in the form of classifications. Lets start with the classifications.
 I simply used OpenAIs 3.5-turbo model as a baseline. Classification of each sentence was done using four major dimensions:
 
 ```mermaid
