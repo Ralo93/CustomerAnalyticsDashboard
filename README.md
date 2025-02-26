@@ -8,6 +8,7 @@ This document describes the architecture of my data processing and visualization
 
 ## Architecture Diagram
 
+```mermaid
 flowchart TD
     User[User] -->|Request| API[API Gateway]
     
