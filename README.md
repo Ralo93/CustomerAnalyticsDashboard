@@ -54,7 +54,7 @@ mindmap
 ![bi](https://github.com/user-attachments/assets/81c8c2e8-3ef4-40fc-8951-471ad7d0d62e)
 
 
-### Features
+### Features Sneak Preview
 
 ![pm](https://github.com/user-attachments/assets/3ad617e6-000e-4a5c-b4cd-fd030c0423fa)
 
