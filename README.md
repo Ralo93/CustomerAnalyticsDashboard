@@ -1,5 +1,117 @@
 # voiceLine3
 
+## System Architecture
+## Overview
+This document describes the architecture of our data processing and visualization system. The system consists of multiple components that work together to process, store, and visualize data.
+System Components
+
+### API Gateway
+
+Serves as the entry point for all user requests
+Forwards requests to the Feature Extractor for processing
+Sends raw data to the DB Service for storage
+Enqueues tasks in the Message Queue for asynchronous processing
+
+### Feature Extractor
+
+Processes input data to extract relevant features
+Stores extracted features in the database
+Optimized for rapid feature analysis and extraction
+
+### DB Service
+
+Receives raw input data from the API Gateway
+Responsible for storing unprocessed data in the database
+Handles database connections and transactions
+
+### Message Queue
+
+Maintains a queue of tasks to be processed asynchronously
+Provides reliable task delivery to the Worker
+Supports prioritization and retry mechanisms
+
+### Worker
+
+Consumes tasks from the Message Queue
+Makes API calls to OpenAI for advanced processing
+Stores processing results back to the database
+
+### Database
+
+Central data store for the entire system
+Stores raw input data, extracted features, and processing results
+Provides persistent storage with data integrity guarantees
+
+### Redis Cache
+
+Caches frequently accessed data from the database
+Reduces database load and improves dashboard performance
+Implements efficient invalidation strategies
+
+### Dashboard
+
+Provides visualization of processed data
+Retrieves data from Redis cache for optimal performance
+Offers interactive data exploration capabilities
+
+### Data Flow
+
+User sends a request to the API Gateway
+API Gateway:
+
+Forwards the request to the Feature Extractor
+Sends raw data to the DB Service
+Enqueues a task in the Message Queue
+
+
+Feature Extractor processes the data and stores features in the database
+DB Service stores the raw data in the database
+Worker pulls tasks from the Message Queue
+Worker makes API calls to OpenAI and stores results in the database
+Redis caches relevant data from the database
+Dashboard retrieves data from Redis to display visualizations
+
+### Architecture Diagram
+The system architecture is visualized in the following diagram:
+
+```mermaid
+
+flowchart TD
+    User[User] -->|Request| API[API Gateway]
+    
+    API -->|Forward Request| FE[Feature Extractor]
+    API -->|Enqueue Task| MQ[Message Queue]
+    API -->|Store Raw Data| DBS[DB Service]
+    
+    FE -->|Store Extracted Features| DB[(Database)]
+    
+    DBS -->|Store Input Data| DB
+    
+    MQ -->|Dequeue Task| Worker[Worker]
+    
+    Worker -->|OpenAI API Call| OpenAI[OpenAI Service]
+    OpenAI -->|Response| Worker
+    
+    Worker -->|Store Results| DB
+    
+    DB -->|Cache Data| Redis[(Redis Cache)]
+    
+    Redis -->|Serve Data| Dashboard[Dashboard]
+    
+    %% Styling
+    classDef primary fill:#4285F4,stroke:#333,stroke-width:1px,color:white;
+    classDef storage fill:#34A853,stroke:#333,stroke-width:1px,color:white;
+    classDef external fill:#FBBC05,stroke:#333,stroke-width:1px,color:white;
+    classDef user fill:#EA4335,stroke:#333,stroke-width:1px,color:white;
+    
+    class API,FE,Worker,MQ,DBS primary;
+    class DB,Redis storage;
+    class OpenAI external;
+    class User,Dashboard user;
+
+
+```
+
 # TechStack
 
 - Python 3.12
