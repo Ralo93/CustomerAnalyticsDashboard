@@ -201,8 +201,7 @@ flowchart TD
 
 ![ProductMentions](https://github.com/user-attachments/assets/482884b8-06e5-4d55-a5d3-55ac1e29f457)
 
-![Uploading Intent.png…]()
-
+![Screenshot 2025-02-26 113755](https://github.com/user-attachments/assets/10b87f9c-4e23-43ea-8372-d0eaed6e03a7)
 
 
 ## Deployment Considerations
