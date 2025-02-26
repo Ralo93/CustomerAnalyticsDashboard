@@ -1,5 +1,17 @@
 # voiceLine3
 
+# TechStack
+
+- Python 3.12
+- Nginx
+- Poetry
+- Streamlit
+- PostgreSQL
+- RabbitMQ
+- RESTfulAPI
+- Docker
+
+
 # Setup
 
 1. Start a redis server installed and started locally
