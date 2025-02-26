@@ -39,7 +39,7 @@ mindmap
       Neutral
 ```
 
-## Results 
+## Sneak 
 
 ### Sales Funnel Classification
 ![newplot](https://github.com/user-attachments/assets/3377d4e9-cf05-48cc-a5f8-32a7dc110f01)
