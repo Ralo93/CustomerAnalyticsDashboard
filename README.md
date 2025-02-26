@@ -39,6 +39,10 @@ mindmap
       Neutral
 ```
 
+## Results 
+
+![newplot](https://github.com/user-attachments/assets/b68507f5-1d29-406e-b34d-7d3e6e45c4a5)
+
 
 %% Simple GitHub-friendly styling
 classDef default fill:#f9f9f9,stroke:#999,stroke-width:1px,color:#333
