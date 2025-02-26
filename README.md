@@ -46,8 +46,7 @@ mindmap
 ## Sneak 
 
 ### Sales Funnel Classification
-
-[View the interactive Sales Funnel Chart](./tests\figures\sales_funnel_classification.html)
+[View the interactive Sales Funnel Chart](./tests/figures/sales_funnel_classification.html)
 
 ### Sentiment per Sales Funnel
 [U<html>
