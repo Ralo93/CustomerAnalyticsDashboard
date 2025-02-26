@@ -41,7 +41,31 @@ mindmap
       Neutral
 ```
 
+## Labels Sneak Preview
+
+
+![sfs](https://github.com/user-attachments/assets/aa0e7250-79e2-40fd-bafa-f8ece7dd3ace)
+
+
+![sentimentperstage](https://github.com/user-attachments/assets/da4b55c4-ac43-4f62-be2a-2fc87a5373ab)
+
+
+![bi](https://github.com/user-attachments/assets/81c8c2e8-3ef4-40fc-8951-471ad7d0d62e)
+
+
+## Features Sneak Preview
+
+![pm](https://github.com/user-attachments/assets/3ad617e6-000e-4a5c-b4cd-fd030c0423fa)
+
+
+![wordcount](https://github.com/user-attachments/assets/9c2e91aa-88a9-4acc-80bf-220aafda3367)
+
+
+
 ## Data Model
+
+Get labels and features. Good enough for the start.
+
 ```mermaid
 classDiagram
     class Sentence {
@@ -101,28 +125,6 @@ classDiagram
     Sentence "1" -- "1" SentenceLabel : "has"
     Sentence "1" -- "1" SentenceFeatures : "has"
 ```
-
-## Labels Sneak Preview
-
-
-![sfs](https://github.com/user-attachments/assets/aa0e7250-79e2-40fd-bafa-f8ece7dd3ace)
-
-
-![sentimentperstage](https://github.com/user-attachments/assets/da4b55c4-ac43-4f62-be2a-2fc87a5373ab)
-
-
-![bi](https://github.com/user-attachments/assets/81c8c2e8-3ef4-40fc-8951-471ad7d0d62e)
-
-
-## Features Sneak Preview
-
-![pm](https://github.com/user-attachments/assets/3ad617e6-000e-4a5c-b4cd-fd030c0423fa)
-
-
-![wordcount](https://github.com/user-attachments/assets/9c2e91aa-88a9-4acc-80bf-220aafda3367)
-
-
-
 
 # As a CTO, I also focus heavily on non-functional requirements and product strategy, mainly:
 
