@@ -41,7 +41,15 @@ mindmap
 
 ## Results 
 
-![newplot](https://github.com/user-attachments/assets/b68507f5-1d29-406e-b34d-7d3e6e45c4a5)
+![newplot](https://github.com/user-attachments/assets/3377d4e9-cf05-48cc-a5f8-32a7dc110f01)
+
+![newplot (4)](https://github.com/user-attachments/assets/aefb6cc1-0f86-43e0-a536-a67b10db1912)
+
+![newplot (3)](https://github.com/user-attachments/assets/6f54f67f-9334-4d24-be74-06393dd15c70)
+
+![newplot (2)](https://github.com/user-attachments/assets/c9ccc8bf-74d1-46ad-8a1e-9a630171573e)
+
+![newplot (1)](https://github.com/user-attachments/assets/b41825f1-48d9-4dd7-9f23-0e283b2e5e2a)
 
 
 %% Simple GitHub-friendly styling
