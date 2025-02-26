@@ -5,7 +5,7 @@
 This document describes the architecture of our data processing and visualization system. The system consists of multiple components that work together to process, store, and visualize data.
 
 
-# System Components
+## Architecture Diagram
 
 
 ```mermaid
@@ -106,9 +106,6 @@ flowchart TD
 7. Worker makes API calls to OpenAI and stores results in the database
 8. Redis caches relevant data from the database
 9. Dashboard retrieves data from Redis to display visualizations
-
-### Architecture Diagram
-The system architecture is visualized in the following diagram:
 
 
 ## TechStack
