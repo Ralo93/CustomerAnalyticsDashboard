@@ -61,7 +61,7 @@ flowchart TD
     
     Worker -->|Send Results| DBS
     
-    DBS -->|Store All Data| DB[(Database)]
+    DBS -->|Store All Data| DB[(Database) PostgreSQL]
     
     DB -->|Cache Data| Redis[(Redis Cache)]
     
