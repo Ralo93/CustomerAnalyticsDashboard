@@ -176,8 +176,8 @@ flowchart TD
    - forwards the request to the Feature Extractor
    - Sends raw data to the DB Service
    - Enqueues a task in the Message Queue
-3. Feature Extractor processes the data synchronously and stores features in the database
-4. DB Service stores the raw data in the database
+3. DB Service stores the raw data in the database 
+4. Feature Extractor processes the data synchronously and stores features in the database
 5. Worker pulls tasks from the Message Queue
 6. Worker makes API calls to OpenAI and stores results in the database asynchronously
 7. Redis caches relevant data from the database
