@@ -277,11 +277,11 @@ flowchart TD
 
 ## Future Enhancements
 
-0. Over time create customer - client specific sales funnels and models
-1. Add service specific databases and db_services
-2. Implement more sophisticated caching strategies
-3. Add real-time processing capabilities
-4. Expand dashboard functionality with additional visualization options
+0. Over time create customer - client specific sales funnels and models (R&D)
+1. Add service specific databases and db_services (scalability)
+2. Implement more sophisticated caching strategies (user experience)
+3. Add real-time processing capabilities (monitoring)
+4. Expand dashboard functionality with additional visualization options (user experiencek)
 
 # Setup
 
