@@ -44,6 +44,7 @@ mindmap
 
 
 ## Sneak 
+### Labels
 
 ![sfs](https://github.com/user-attachments/assets/aa0e7250-79e2-40fd-bafa-f8ece7dd3ace)
 
@@ -51,13 +52,17 @@ mindmap
 ![sentimentperstage](https://github.com/user-attachments/assets/da4b55c4-ac43-4f62-be2a-2fc87a5373ab)
 
 
+![bi](https://github.com/user-attachments/assets/81c8c2e8-3ef4-40fc-8951-471ad7d0d62e)
+
+
+### Features
+
 ![pm](https://github.com/user-attachments/assets/3ad617e6-000e-4a5c-b4cd-fd030c0423fa)
 
 
 ![wordcount](https://github.com/user-attachments/assets/9c2e91aa-88a9-4acc-80bf-220aafda3367)
 
 
-![bi](https://github.com/user-attachments/assets/81c8c2e8-3ef4-40fc-8951-471ad7d0d62e)
 
 
 # As a CTO, I focus more on non-functional requirements and product strategy.
