@@ -42,7 +42,7 @@ mindmap
 ```
 
 ## Data Model
-
+```mermaid
 classDiagram
     class Sentence {
       +String id
@@ -100,7 +100,7 @@ classDiagram
     
     Sentence "1" -- "1" SentenceLabel : "has"
     Sentence "1" -- "1" SentenceFeatures : "has"
-
+```
 
 ## Labels Sneak Preview
 
