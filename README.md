@@ -41,14 +41,19 @@ mindmap
 
 ## Results 
 
+### Sales Funnel Classification
 ![newplot](https://github.com/user-attachments/assets/3377d4e9-cf05-48cc-a5f8-32a7dc110f01)
 
+### Sentiment per Sales Funnel
 ![newplot (4)](https://github.com/user-attachments/assets/aefb6cc1-0f86-43e0-a536-a67b10db1912)
 
+### Product Mentions
 ![newplot (3)](https://github.com/user-attachments/assets/6f54f67f-9334-4d24-be74-06393dd15c70)
 
+### Word Count per Sentence
 ![newplot (2)](https://github.com/user-attachments/assets/c9ccc8bf-74d1-46ad-8a1e-9a630171573e)
 
+### Business Impact 
 ![newplot (1)](https://github.com/user-attachments/assets/b41825f1-48d9-4dd7-9f23-0e283b2e5e2a)
 
 
