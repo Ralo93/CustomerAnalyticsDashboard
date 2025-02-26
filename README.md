@@ -74,7 +74,6 @@ This document describes the architecture of our data processing and visualizatio
 The system architecture is visualized in the following diagram:
 
 ```mermaid
-
 flowchart TD
     User[User] -->|Request| API[API Gateway]
     
@@ -82,16 +81,16 @@ flowchart TD
     API -->|Enqueue Task| MQ[Message Queue]
     API -->|Store Raw Data| DBS[DB Service]
     
-    FE -->|Store Extracted Features| DB[(Database)]
-    
-    DBS -->|Store Input Data| DB
+    FE -->|Send Extracted Features| DBS
     
     MQ -->|Dequeue Task| Worker[Worker]
     
     Worker -->|OpenAI API Call| OpenAI[OpenAI Service]
     OpenAI -->|Response| Worker
     
-    Worker -->|Store Results| DB
+    Worker -->|Send Results| DBS
+    
+    DBS -->|Store All Data| DB[(Database)]
     
     DB -->|Cache Data| Redis[(Redis Cache)]
     
@@ -107,7 +106,6 @@ flowchart TD
     class DB,Redis storage;
     class OpenAI external;
     class User,Dashboard user;
-
 
 ```
 
