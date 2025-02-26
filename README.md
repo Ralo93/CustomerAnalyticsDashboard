@@ -109,7 +109,7 @@ flowchart TD
 
 ```
 
-# TechStack
+## TechStack
 
 - Python 3.12
 - Nginx
@@ -120,6 +120,19 @@ flowchart TD
 - RESTfulAPI
 - Docker
 
+## Deployment Considerations
+
+Each component can be deployed as a separate microservice
+Database and Redis should be configured for high availability
+Consider using auto-scaling for API Gateway, Worker, and Feature Extractor based on load
+Implement appropriate monitoring and alerting for all components
+
+## Future Enhancements
+
+Add support for multiple AI service providers
+Implement more sophisticated caching strategies
+Add real-time processing capabilities
+Expand dashboard functionality with additional visualization options
 
 # Setup
 
