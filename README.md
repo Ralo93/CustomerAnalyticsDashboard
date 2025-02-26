@@ -131,9 +131,8 @@ classDiagram
 1. Maintainability
 2. Scalability
 3. Robustness
-4. Test Coverage
-5. Deployment ready architecture
-6. Fast Iteration using Customer Feedback and an imperfect MVP
+4. Deployability
+5. Fast Iteration using Customer Feedback and an imperfect MVP
 
 I need an architecture which is fast, can handle changing requirements, can be scaled and is cheap. I want to iterate quickly to pivot into better product strategies if necessary.
 So I came up with the following architecture for an MVP:
