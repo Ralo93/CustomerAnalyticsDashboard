@@ -85,7 +85,7 @@ flowchart TD
 
 - Caches frequently accessed data from the database
 - Reduces database load and improves dashboard performance
-- Implements efficient invalidation strategies
+- Implements efficient invalidation strategies (not yet)
 
 ### Dashboard
 
