@@ -13,79 +13,7 @@ import json
 import numpy as np
 from typing import Dict, Optional, List
 
-# Keep existing logging setup
-def setup_logging():
-    os.makedirs('logs', exist_ok=True)
-    for handler in logging.root.handlers[:]:
-        logging.root.removeHandler(handler)
-    
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),
-            RotatingFileHandler(
-                'logs/ml_insights_dashboard.log', 
-                maxBytes=10*1024*1024,
-                backupCount=5
-            )
-        ]
-    )
-    return logging.getLogger(__name__)
 
-logger = setup_logging()
-load_dotenv()
-
-# Configuration
-DB_SERVICE_URL = os.getenv("DB_SERVICE_URL", "http://localhost:8001")
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-CACHE_EXPIRY = int(os.getenv("CACHE_EXPIRY", 3600))  # Extended cache time to 5 minutes
-
-# Set up page configuration
-st.set_page_config(page_title="ML Insights Dashboard", page_icon="📊", layout="wide")
-
-# Redis client initialization
-def create_redis_client():
-    try:
-        client = redis.Redis(
-            host=REDIS_HOST,
-            port=REDIS_PORT,
-            decode_responses=True,
-            socket_timeout=2
-        )
-        client.ping()
-        logger.info(f"Successfully connected to Redis at {REDIS_HOST}:{REDIS_PORT}")
-        return client
-    except redis.ConnectionError:
-        logger.error(f"Failed to connect to Redis at {REDIS_HOST}:{REDIS_PORT}")
-        return None
-
-redis_client = create_redis_client()
-
-def verify_redis_caching():
-    """Verify Redis connection and caching"""
-    if not redis_client:
-        st.warning("Redis is not connected. Caching is disabled.")
-        return False
-    
-    try:
-        test_key = 'ml_insights:test_cache'
-        redis_client.setex(test_key, 10, json.dumps({'test': 'caching works'}))
-        cached_test = redis_client.get(test_key)
-        
-        if cached_test:
-            st.sidebar.success("✅ Redis Caching Verified")
-            return True
-        else:
-            st.sidebar.warning("⚠️ Redis Caching Test Failed")
-            return False
-    
-    except Exception as e:
-        st.sidebar.error(f"❌ Redis Caching Error: {str(e)}")
-        logger.error(f"Redis caching verification failed: {str(e)}")
-        return False
-    
 
 def fetch_data(endpoint: str, cache_key: str, params=None):
     """Fetch data from API with Redis caching"""
@@ -289,27 +217,6 @@ def fetch_all_sentences(include_non_relevant=True):
         st.error(f"Error fetching all sentences: {str(e)}")
         return []
 
-# Update filter_sentences to better handle various filtering cases
-def filter_sentences(all_sentences, filters: Dict[str, any], limit: int = 100):
-    """Filter sentences client-side based on criteria"""
-    if not all_sentences:
-        return []
-    
-    filtered = all_sentences
-    
-    # Apply filters - handle various data types properly
-    for key, value in filters.items():
-        if value is not None and value != "All":
-            # Boolean filter (for is_sales_funnel_relevant)
-            if isinstance(value, bool):
-                filtered = [s for s in filtered if s.get(key) == value]
-            # String filter (for most other attributes)
-            else:
-                filtered = [s for s in filtered if str(s.get(key, '')).lower() == str(value).lower()]
-    
-    # Sort by created_at (newest first) and limit results
-    filtered = sorted(filtered, key=lambda x: x.get('created_at', ''), reverse=True)
-    return filtered[:limit]
 
 # Modify the display_sentence_details function to better show sales funnel relevance information
 def display_sentence_details(sentences_data, limit=100):
@@ -363,6 +270,7 @@ def display_sentence_details(sentences_data, limit=100):
                 st.write(f"- **Business Impact:** {sentence.get('business_impact', 'N/A')}")
                 st.write(f"- **Intent:** {sentence.get('intent', 'N/A')}")
 
+        
 # New function to render sales funnel relevance statistics
 def render_relevance_stats(stats, all_sentences):
     """Display sales funnel relevance statistics"""
@@ -500,6 +408,29 @@ def render_sentiment_distribution(df, all_sentences):
     
     filtered_sentences = filter_sentences(all_sentences, filters)
     display_sentence_details(filtered_sentences)
+
+    # Update filter_sentences to better handle various filtering cases
+def filter_sentences(all_sentences, filters: Dict[str, any], limit: int = 100):
+    """Filter sentences client-side based on criteria"""
+    if not all_sentences:
+        return []
+    
+    filtered = all_sentences
+    
+    # Apply filters - handle various data types properly
+    for key, value in filters.items():
+        if value is not None and value != "All":
+            # Boolean filter (for is_sales_funnel_relevant)
+            if isinstance(value, bool):
+                filtered = [s for s in filtered if s.get(key) == value]
+            # String filter (for most other attributes)
+            else:
+                filtered = [s for s in filtered if str(s.get(key, '')).lower() == str(value).lower()]
+    
+    # Sort by created_at (newest first) and limit results
+    filtered = sorted(filtered, key=lambda x: x.get('created_at', ''), reverse=True)
+    return filtered[:limit]
+
 def render_impact_scores(df, all_sentences):
     """Visualize average impact scores per stage with enhanced interpretability"""
     if df.empty:
@@ -2273,233 +2204,3 @@ def render_trends_tab():
         
         # Display the chart
         st.altair_chart(funnel_chart, use_container_width=True)
-def main():
-    # Initialize session state
-    if 'data' not in st.session_state:
-        st.session_state.data = {
-            'all_sentences': None,
-            'sentiment_dist': None,
-            'impact_scores': None,
-            'sentiment_impact': None,
-            'funnel_metrics': None,
-            'intent_dist': None,
-            'high_impact': None,
-            'alignment': None,
-            'info_impact': None,
-            'relevance_stats': None,
-            'refresh_count': 0,
-            'last_refresh_time': time.time(),
-            'data_loaded': False,
-            'relevance_filter': 'all',  # Default to showing all sentences
-            'product_mentions': None
-        }
-    
-    # Verify Redis caching
-    redis_verified = verify_redis_caching()
-
-    # Sidebar controls
-    st.sidebar.title("Dashboard Controls")
-    
-    # Relevance filter in sidebar - changed to radio buttons for better UX
-    st.session_state.data['relevance_filter'] = st.sidebar.radio(
-        "Filter by Sales Funnel Relevance",
-        options=["All Sentences", "Relevant Only", "Non-Relevant Only"],
-        index=0,  # Default to "All Sentences"
-        key="sidebar_relevance_filter"
-    )
-    
-    # Map the selection to the actual filter value
-    relevance_filter_value = "all"
-    #if st.session_state.data['relevance_filter'] == "Relevant Only":
-    #    relevance_filter_value = "relevant"
-    #    include_non_relevant = False
-    #elif st.session_state.data['relevance_filter'] == "Non-Relevant Only":
-    #    relevance_filter_value = "non_relevant"
-    #    include_non_relevant = True
-    #else:
-    #    include_non_relevant = True
-    
-    # Rest of the sidebar controls
-    auto_refresh = st.sidebar.checkbox("Enable auto-refresh", value=False)
-    refresh_interval = st.sidebar.slider(
-        "Refresh interval (seconds)",
-        min_value=60,
-        max_value=3600,
-        value=300
-    )
-
-    # Main content
-    st.title("Customer Interaction Analytics Dashboard")
-    #st.write("Interactive analytics with client-side filtering for fast exploration")
-    
-    # Check if data needs to be loaded/refreshed
-    current_time = time.time()
-    time_since_refresh = current_time - st.session_state.data['last_refresh_time']
-    force_refresh = st.sidebar.button("Refresh Data Now")
-    
-    needs_refresh = (
-        st.session_state.data['all_sentences'] is None or
-        force_refresh or
-        (auto_refresh and time_since_refresh > refresh_interval)
-    )
-    
-    if needs_refresh:
-        # Increment refresh counter
-        st.session_state.data['refresh_count'] += 1
-        
-        # Loading UI elements
-        init_placeholder = st.empty()
-        with init_placeholder.container():
-            st.info("⏳ Loading or refreshing dashboard data...")
-            progress_bar = st.progress(0)
-        
-        # Always load all sentences regardless of filter for maximum flexibility
-        with st.spinner("Loading sentence data..."):
-            progress_bar.progress(15)
-            # Load all sentences so we can filter client-side
-            st.session_state.data['all_sentences'] = fetch_all_sentences(include_non_relevant=True)
-            progress_bar.progress(30)
-            st.session_state.data['relevance_stats'] = fetch_relevance_stats()
-            progress_bar.progress(40)
-        
-        # Load analytics data
-        with st.spinner("Loading analytics data..."):
-            progress_bar.progress(50)
-            st.session_state.data['sentiment_dist'] = fetch_data("sentiment-distribution", "ml_insights:sentiment_dist")
-            progress_bar.progress(60)
-            st.session_state.data['impact_scores'] = fetch_data("impact-scores", "ml_insights:impact_scores")
-            progress_bar.progress(65)
-            st.session_state.data['sentiment_impact'] = fetch_data("sentiment-impact", "ml_insights:sentiment_impact")
-            progress_bar.progress(70)
-            st.session_state.data['funnel_metrics'] = fetch_data("funnel-metrics", "ml_insights:funnel_metrics")
-            progress_bar.progress(75)
-            st.session_state.data['intent_dist'] = fetch_data("intent-distribution", "ml_insights:intent_dist")
-            progress_bar.progress(80)
-            st.session_state.data['high_impact'] = fetch_data("high-impact-sentiment", "ml_insights:high_impact")
-            progress_bar.progress(85)
-            st.session_state.data['alignment'] = fetch_data("stage-intent-alignment", "ml_insights:alignment")
-            progress_bar.progress(90)
-            st.session_state.data['product_mentions'] = fetch_data("product-mentions", "ml_insights:product_mentions")
-            progress_bar.progress(95)
-            st.session_state.data['info_impact'] = fetch_data("impact-information", "ml_insights:info_impact")
-            progress_bar.progress(100)
-        
-        # Update refresh timestamp and remove loading placeholder
-        st.session_state.data['last_refresh_time'] = current_time
-        st.session_state.data['data_loaded'] = True
-        time.sleep(0.5)  # Brief pause to show completion
-        init_placeholder.empty()
-    
-    # Display loading status
-    if st.session_state.data['all_sentences']:
-        # Filter the sentences based on the global relevance filter
-        filtered_sentences = prepare_filtered_sentences(
-            st.session_state.data['all_sentences'], 
-            relevance_filter_value
-        )
-        
-        st.success(f"✅ Data loaded successfully ({len(filtered_sentences)} sentences)")
-        
-    else:
-        st.error("❌ Failed to load sentence data")
-        st.stop()  # Stop execution if data loading failed
-    
-    # Create tabs for different visualizations
-    tabs = st.tabs([
-        "Relevance Overview",
-        "Sentiment Distribution",
-        "Impact Scores",
-        "Sentiment Impact",
-        "Funnel Metrics",
-        "Intent Distribution",
-        "High Impact Sentiment",
-        "Business Impact Information",
-        "Product Mentions",
-        "Time Series Trends" 
-    ])
-
-    # Use the filtered sentences for all visualizations
-    filtered_sentences = prepare_filtered_sentences(
-        st.session_state.data['all_sentences'], 
-        relevance_filter_value
-    )
-
-    with tabs[0]:
-        # Check if relevance_stats exists in session state before using it
-        if 'relevance_stats' in st.session_state.data and st.session_state.data['relevance_stats']:
-            render_relevance_stats(
-                st.session_state.data['relevance_stats'],
-                filtered_sentences
-            )
-        else:
-            st.warning("Sales funnel relevance statistics are not available. Please refresh the data.")
-        
-    with tabs[1]:
-        render_sentiment_distribution(
-            st.session_state.data['sentiment_dist'], 
-            filtered_sentences
-        )
-
-    with tabs[2]:
-        render_impact_scores(
-            st.session_state.data['impact_scores'], 
-            filtered_sentences
-        )
-
-    with tabs[3]:
-        render_sentiment_impact(
-            st.session_state.data['sentiment_impact'], 
-            filtered_sentences
-        )
-
-    with tabs[4]:
-        render_funnel_metrics(
-            st.session_state.data['funnel_metrics'], 
-            filtered_sentences
-        )
-
-    with tabs[5]:
-        render_intent_distribution(
-            st.session_state.data['intent_dist'], 
-            filtered_sentences
-        )
-
-    with tabs[6]:
-        render_high_impact_sentiment(
-            st.session_state.data['high_impact'], 
-            filtered_sentences
-        )
-
-    with tabs[7]:
-        render_impact_information(
-            st.session_state.data['info_impact'], 
-            filtered_sentences
-        )
-
-    # In the main tabs section, modify the Product Mentions tab
-    with tabs[8]:
-        # Use the pre-loaded product mentions data from session state
-        if st.session_state.data.get('product_mentions') is not None:
-            render_product_mentions(
-                st.session_state.data['product_mentions'], 
-                filtered_sentences
-            )
-        else:
-            st.warning("Product mentions data is not available. Please refresh the data.")
-            
-    # Add the new Time Series Trends tab
-    with tabs[9]:
-        render_trends_tab()
-
-    # Display refresh information
-    st.sidebar.write(f"Total Refreshes: {st.session_state.data['refresh_count']}")
-    st.sidebar.write(f"Last Refresh: {time.strftime('%H:%M:%S', time.localtime(st.session_state.data['last_refresh_time']))}")
-    
-    # Auto-refresh logic
-    if auto_refresh and (time.time() - st.session_state.data['last_refresh_time']) > refresh_interval:
-        st.session_state.data['refresh_count'] += 1
-        logger.info(f"Auto-refresh triggered. Refresh count: {st.session_state.data['refresh_count']}")
-        st.rerun()
-        
-if __name__ == "__main__":
-    main()
