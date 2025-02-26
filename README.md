@@ -77,6 +77,9 @@ mindmap
 I need an architecture which is fast, can handle changing requirements, can be scaled and is cheap. I want to iterate quickly to pivot into better product strategies.
 So I came up with the following architecture for an MVP:
 
+- Input: Sentences
+- Output: Interactive Dashboard 
+
 ## Architecture Diagram
 
 ```mermaid
