@@ -4,6 +4,38 @@
 ## Overview
 This document describes the architecture of my data processing and visualization system. The system consists of multiple components that work together to process, store, and visualize data from the sales environment.
 
+```mermaid
+mindmap
+  root((AI Classification))
+    Sales Funnel Relevance
+      Awareness
+      Interest
+      Retention
+      	Consideration
+      	Evaluation
+      Intent
+      Purchase
+      
+
+    Communication Intent
+      Complaint
+      Feedback
+      General
+      Information
+      Purchase
+
+
+    Sentiment
+      Positive
+      Neutral
+      Negative
+    Business Impact
+      High Impact
+      Medium Impact
+      Low Impact
+```
+
+
 ## Architecture Diagram
 
 
