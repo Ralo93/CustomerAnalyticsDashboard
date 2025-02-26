@@ -173,15 +173,15 @@ flowchart TD
 - User sends a request to the API Gateway
   
 1. The API Gateway
-  1. forwards the request to the Feature Extractor
-  2. Sends raw data to the DB Service
-  3. Enqueues a task in the Message Queue
-4. Feature Extractor processes the data and stores features in the database
-5. DB Service stores the raw data in the database
-6. Worker pulls tasks from the Message Queue
-7. Worker makes API calls to OpenAI and stores results in the database
-8. Redis caches relevant data from the database
-9. Dashboard retrieves data from Redis to display visualizations
+   - forwards the request to the Feature Extractor
+   - Sends raw data to the DB Service
+   - Enqueues a task in the Message Queue
+3. Feature Extractor processes the data and stores features in the database
+4. DB Service stores the raw data in the database
+5. Worker pulls tasks from the Message Queue
+6. Worker makes API calls to OpenAI and stores results in the database
+7. Redis caches relevant data from the database
+8. Dashboard retrieves data from Redis to display visualizations
 
 
 ## TechStack
