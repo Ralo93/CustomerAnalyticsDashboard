@@ -13,7 +13,7 @@
 3. Run honcho start
 
 
-# Added lines
+# Added lines (dont take seriously)
 
 ```plaintext
 111	I hate everything. My life sucks and I will destroy this company with a bomb.
