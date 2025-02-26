@@ -49,10 +49,10 @@ classDef root fill:#6f42c1,color:white,stroke:#5a32a3
 
 ```mermaid
 flowchart TD
-    User[User] -->|Request| API[API Gateway]
+    User([User]) -->|Request| API[API Gateway]
     
     API -->|Forward Request| FE[Feature Extractor]
-    API -->|Enqueue Task| MQ[Message Queue]
+    API -->|Enqueue Task| MQ[(Message Queue)]
     API -->|Store Raw Data| DBS[DB Service]
     
     FE -->|Send Extracted Features| DBS
@@ -70,17 +70,17 @@ flowchart TD
     
     Redis -->|Serve Data| Dashboard[Dashboard]
     
-    %% Styling
-    classDef primary fill:#4285F4,stroke:#333,stroke-width:1px,color:white;
-    classDef storage fill:#34A853,stroke:#333,stroke-width:1px,color:white;
-    classDef external fill:#FBBC05,stroke:#333,stroke-width:1px,color:white;
-    classDef user fill:#EA4335,stroke:#333,stroke-width:1px,color:white;
+    %% GitHub-friendly styling
+    classDef default fill:#f9f9f9,stroke:#999,stroke-width:1px,color:#333
+    classDef service fill:#0366d6,stroke:#0366d6,color:white
+    classDef storage fill:#28a745,stroke:#28a745,color:white
+    classDef external fill:#6f42c1,stroke:#6f42c1,color:white
+    classDef user fill:#d73a49,stroke:#d73a49,color:white
     
-    class API,FE,Worker,MQ,DBS primary;
-    class DB,Redis storage;
-    class OpenAI external;
-    class User,Dashboard user;
-
+    class API,FE,Worker,DBS service
+    class DB,Redis,MQ storage
+    class OpenAI external
+    class User,Dashboard user
 ```
 
 
