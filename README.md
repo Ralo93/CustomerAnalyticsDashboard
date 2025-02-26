@@ -4,6 +4,11 @@
 ## Overview
 This document describes the architecture of my data processing and visualization system. The system consists of multiple components that work together to process, store, and visualize data from the sales environment.
 
+
+
+## Architecture Diagram
+
+
 ```mermaid
 mindmap
   root((AI Classification))
@@ -38,46 +43,6 @@ mindmap
       Critical
       Medium
       Neutral
-```
-
-
-## Architecture Diagram
-
-
-```mermaid
-flowchart TD
-    User[User] -->|Request| API[API Gateway]
-    
-    API -->|Forward Request| FE[Feature Extractor]
-    API -->|Enqueue Task| MQ[Message Queue]
-    API -->|Store Raw Data| DBS[DB Service]
-    
-    FE -->|Send Extracted Features| DBS
-    
-    MQ -->|Dequeue Task| Worker[Worker]
-    
-    Worker -->|OpenAI API Call| OpenAI[OpenAI Service]
-    OpenAI -->|Response| Worker
-    
-    Worker -->|Send Results| DBS
-    
-    DBS -->|Store All Data| DB[(Database) PostgreSQL]
-    
-    DB -->|Cache Data| Redis[(Redis Cache)]
-    
-    Redis -->|Serve Data| Dashboard[Dashboard]
-    
-    %% Styling
-    classDef primary fill:#4285F4,stroke:#333,stroke-width:1px,color:white;
-    classDef storage fill:#34A853,stroke:#333,stroke-width:1px,color:white;
-    classDef external fill:#FBBC05,stroke:#333,stroke-width:1px,color:white;
-    classDef user fill:#EA4335,stroke:#333,stroke-width:1px,color:white;
-    
-    class API,FE,Worker,MQ,DBS primary;
-    class DB,Redis storage;
-    class OpenAI external;
-    class User,Dashboard user;
-
 ```
 
 ### API Gateway
