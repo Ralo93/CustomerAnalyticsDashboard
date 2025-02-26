@@ -68,6 +68,7 @@ mindmap
 5. Deployment ready architecture
 6. Fast Iteration using Customer Feedback asap
 
+I need an architecture which is fast, can handle changing requirements, can be scaled and is cheap. I want to iterate quickly to pivot into a better product strategies.
 So I came up with the following architecture for an MVP:
 
 ## Architecture Diagram
