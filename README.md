@@ -8,6 +8,40 @@ This document describes the architecture of my data processing and visualization
 
 ## Architecture Diagram
 
+flowchart TD
+    User[User] -->|Request| API[API Gateway]
+    
+    API -->|Forward Request| FE[Feature Extractor]
+    API -->|Enqueue Task| MQ[Message Queue]
+    API -->|Store Raw Data| DBS[DB Service]
+    
+    FE -->|Send Extracted Features| DBS
+    
+    MQ -->|Dequeue Task| Worker[Worker]
+    
+    Worker -->|OpenAI API Call| OpenAI[OpenAI Service]
+    OpenAI -->|Response| Worker
+    
+    Worker -->|Send Results| DBS
+    
+    DBS -->|Store All Data| DB[(Database)]
+    
+    DB -->|Cache Data| Redis[(Redis Cache)]
+    
+    Redis -->|Serve Data| Dashboard[Dashboard]
+    
+    %% Styling
+    classDef primary fill:#4285F4,stroke:#333,stroke-width:1px,color:white;
+    classDef storage fill:#34A853,stroke:#333,stroke-width:1px,color:white;
+    classDef external fill:#FBBC05,stroke:#333,stroke-width:1px,color:white;
+    classDef user fill:#EA4335,stroke:#333,stroke-width:1px,color:white;
+    
+    class API,FE,Worker,MQ,DBS primary;
+    class DB,Redis storage;
+    class OpenAI external;
+    class User,Dashboard user;
+
+```
 
 ```mermaid
 mindmap
