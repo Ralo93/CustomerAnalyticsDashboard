@@ -33,9 +33,8 @@ mindmap
 
 
     Business Impact
-      High Impact
-      Medium Impact
-      Low Impact
+      High 
+      Low 
       Critical
       Medium
       Neutral
