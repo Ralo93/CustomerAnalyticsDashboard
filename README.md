@@ -289,6 +289,7 @@ flowchart TD
 2. Have postgre server installed locally
 3. Have rabbitmq installed and running locally
 4. Clone repository
+5. Run ./tests/ingestion.py for populating the database
 
 # Application Startup
 1. Navigate to root of project
