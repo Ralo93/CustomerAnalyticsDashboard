@@ -59,8 +59,16 @@ mindmap
 ### Business Impact 
 ![newplot (1)](https://github.com/user-attachments/assets/b41825f1-48d9-4dd7-9f23-0e283b2e5e2a)
 
+# As a CTO I require a focus more on non-functional requirements and product strategy.
 
+1. Maintainability
+2. Scalability
+3. Robustness
+4. Test Coverage
+5. Deployment ready architecture
+6. Fast Iteration using Customer Feedback asap
 
+So I came up with the following architecture for an MVP:
 
 ## Architecture Diagram
 
