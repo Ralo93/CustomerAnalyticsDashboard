@@ -10,61 +10,39 @@ This document describes the architecture of my data processing and visualization
 mindmap
   root((AI Classification))
     Sales Funnel Relevance
-      Awareness:::awareness
-      Interest:::interest
-      Retention:::retention
-        Consideration:::consideration
-        Evaluation:::evaluation
-      Intent:::intent
-      Purchase:::purchase
+      Awareness
+      Interest
+      Retention
+        Consideration
+        Evaluation
+      Intent
+      Purchase
       
     Communication Intent
-      Complaint:::complaint
-      Feedback:::feedback
-      General:::general
-      Information:::information
-      Purchase:::purchase2
-      Support:::support
+      Complaint
+      Feedback
+      General
+      Information
+      Purchase
+      Support
     
     Sentiment
-      Positive:::positive
-      Neutral:::neutral
-      Negative:::negative
+      Positive
+      Neutral
+      Negative
     
     Business Impact
-      High:::high
-      Low:::low
-      Critical:::critical
-      Medium:::medium
-      Neutral:::neutral2
-
+      High
+      Low
+      Critical
+      Medium
+      Neutral
 ```
-%% Modern styling with gradients and better colors
-classDef default fill:#f9f9f9,stroke:#ccc,stroke-width:1px
-classDef awareness fill:#FF9AA2,color:#333
-classDef interest fill:#FFB7B2,color:#333
-classDef retention fill:#FFDAC1,color:#333
-classDef consideration fill:#E2F0CB,color:#333
-classDef evaluation fill:#B5EAD7,color:#333
-classDef intent fill:#C7CEEA,color:#333
-classDef purchase fill:#98D8C8,color:#333
 
-classDef complaint fill:#FF6B6B,color:white
-classDef feedback fill:#4ECDC4,color:#333
-classDef general fill:#C7F464,color:#333
-classDef information fill:#45B7D1,color:white
-classDef purchase2 fill:#01BAEF,color:white
-classDef support fill:#0075A2,color:white
 
-classDef positive fill:#02C39A,color:white
-classDef neutral fill:#F0F3BD,color:#333
-classDef negative fill:#E84855,color:white
-
-classDef high fill:#5F0F40,color:white
-classDef medium fill:#9A031E,color:white
-classDef critical fill:#FB8B24,color:#333
-classDef low fill:#E36414,color:white
-classDef neutral2 fill:#0F4C5C,color:white
+%% Simple GitHub-friendly styling
+classDef default fill:#f9f9f9,stroke:#999,stroke-width:1px,color:#333
+classDef root fill:#6f42c1,color:white,stroke:#5a32a3
 
 
 ## Architecture Diagram
