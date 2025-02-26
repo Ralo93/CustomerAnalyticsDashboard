@@ -39,9 +39,6 @@ mindmap
       Neutral
 ```
 
-classDef default fill:#f9f9f9,stroke:#999,stroke-width:1px,color:#333
-classDef root fill:#6f42c1,color:white,stroke:#5a32a3
-
 
 ## Sneak 
 
