@@ -192,6 +192,14 @@ flowchart TD
 - RESTfulAPI
 - Docker
 
+
+## Dashboard
+
+![relevance](https://github.com/user-attachments/assets/ea6a8e11-ac32-467e-924b-af9b1b120bcd)
+
+![funnel](https://github.com/user-attachments/assets/3af951fe-4d9d-4dbe-b5ea-04ef8eb71547)
+
+
 ## Deployment Considerations
 
 - Each component can be deployed as a separate microservice
