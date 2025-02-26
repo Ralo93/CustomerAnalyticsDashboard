@@ -9,69 +9,66 @@ This document describes the architecture of our data processing and visualizatio
 
 ### API Gateway
 
-Serves as the entry point for all user requests
-Forwards requests to the Feature Extractor for processing
-Sends raw data to the DB Service for storage
-Enqueues tasks in the Message Queue for asynchronous processing
+- Serves as the entry point for all user requests
+- Forwards requests to the Feature Extractor for processing
+- Sends raw data to the DB Service for storage
+- Enqueues tasks in the Message Queue for asynchronous processing
 
 ### Feature Extractor
 
-Processes input data to extract relevant features
-Stores extracted features in the database
-Optimized for rapid feature analysis and extraction
+- Processes input data to extract relevant features
+- Stores extracted features in the database
+- Optimized for rapid feature analysis and extraction
 
 ### DB Service
 
-Receives raw input data from the API Gateway
-Responsible for storing unprocessed data in the database
-Handles database connections and transactions
+- Receives raw input data from the API Gateway
+- Responsible for storing unprocessed data in the database
+- Handles database connections and transactions
 
 ### Message Queue
 
-Maintains a queue of tasks to be processed asynchronously
-Provides reliable task delivery to the Worker
-Supports prioritization and retry mechanisms
+- Maintains a queue of tasks to be processed asynchronously
+- Provides reliable task delivery to the Worker
+- Supports prioritization and retry mechanisms
 
 ### Worker
 
-Consumes tasks from the Message Queue
-Makes API calls to OpenAI for advanced processing
-Stores processing results back to the database
+- Consumes tasks from the Message Queue
+- Makes API calls to OpenAI for advanced processing
+- Stores processing results back to the database
 
 ### Database
 
-Central data store for the entire system
-Stores raw input data, extracted features, and processing results
-Provides persistent storage with data integrity guarantees
+- Central data store for the entire system
+- Stores raw input data, extracted features, and processing results
+- Provides persistent storage with data integrity guarantees
 
 ### Redis Cache
 
-Caches frequently accessed data from the database
-Reduces database load and improves dashboard performance
-Implements efficient invalidation strategies
+- Caches frequently accessed data from the database
+- Reduces database load and improves dashboard performance
+- Implements efficient invalidation strategies
 
 ### Dashboard
 
-Provides visualization of processed data
-Retrieves data from Redis cache for optimal performance
-Offers interactive data exploration capabilities
+- Provides visualization of processed data
+- Retrieves data from Redis cache for optimal performance
+- Offers interactive data exploration capabilities
 
 ### Data Flow
 
-User sends a request to the API Gateway
-API Gateway:
-
-Forwards the request to the Feature Extractor
-Sends raw data to the DB Service
-Enqueues a task in the Message Queue
-
-
-Feature Extractor processes the data and stores features in the database
-DB Service stores the raw data in the database
-Worker pulls tasks from the Message Queue
-Worker makes API calls to OpenAI and stores results in the database
-Redis caches relevant data from the database
-Dashboard retrieves data from Redis to display visualizations
+- User sends a request to the API Gateway
+  
+1. The API Gateway forwards the request to the Feature Extractor
+2. Sends raw data to the DB Service
+3. Enqueues a task in the Message Queue
+4. Feature Extractor processes the data and stores features in the database
+5. DB Service stores the raw data in the database
+6. Worker pulls tasks from the Message Queue
+7. Worker makes API calls to OpenAI and stores results in the database
+8. Redis caches relevant data from the database
+9. Dashboard retrieves data from Redis to display visualizations
 
 ### Architecture Diagram
 The system architecture is visualized in the following diagram:
