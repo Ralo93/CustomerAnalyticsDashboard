@@ -42,8 +42,8 @@ mindmap
 ```
 
 
-## Sneak 
-### Labels
+## Labels Sneak Preview
+
 
 ![sfs](https://github.com/user-attachments/assets/aa0e7250-79e2-40fd-bafa-f8ece7dd3ace)
 
@@ -195,7 +195,7 @@ flowchart TD
 - Docker
 
 
-## Dashboard
+## Dashboard Sneak Preview
 
 ![relevance](https://github.com/user-attachments/assets/ea6a8e11-ac32-467e-924b-af9b1b120bcd)
 
