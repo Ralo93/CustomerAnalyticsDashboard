@@ -23,16 +23,22 @@ mindmap
       General
       Information
       Purchase
+      Support
 
 
     Sentiment
       Positive
       Neutral
       Negative
+
+
     Business Impact
       High Impact
       Medium Impact
       Low Impact
+      Critical
+      Medium
+      Neutral
 ```
 
 
