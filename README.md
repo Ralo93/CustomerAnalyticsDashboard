@@ -6,6 +6,8 @@ This document describes the architecture of my data processing and visualization
 
 ## Classification Targets
 
+I simply used OpenAIs 3.5-turbo model as a baseline. Classification of each sentence was done using the following categories:
+
 ```mermaid
 mindmap
   root((AI Classification))
