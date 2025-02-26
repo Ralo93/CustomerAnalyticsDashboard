@@ -41,6 +41,66 @@ mindmap
       Neutral
 ```
 
+## Data Model
+
+classDiagram
+    class Sentence {
+      +String id
+      +String external_id
+      +String text
+      +DateTime created_at
+    }
+    
+    class SentenceLabel {
+      +String id
+      +String sentence_id
+      +DateTime created_at
+      +DateTime last_updated
+      +String sales_funnel_stage
+      +Float sales_funnel_confidence
+      +String sentiment
+      +Float sentiment_confidence
+      +String intent
+      +Float intent_confidence
+      +String business_impact
+      +Float business_impact_confidence
+      +Boolean is_sales_funnel_relevant
+      +Float is_sales_funnel_relevant_confidence
+    }
+    
+    class SentenceFeatures {
+      +String id
+      +String sentence_id
+      +DateTime created_at
+      +Integer word_count
+      +Integer char_count
+      +Float avg_word_length
+      +Integer noun_count
+      +Integer verb_count
+      +Integer adj_count
+      +Integer entity_count
+      +Boolean mentions_masterblaster
+      +Integer masterblaster_quantity
+      +Boolean mentions_funpun
+      +Integer funpun_quantity
+      +Boolean mentions_powerpro
+      +Integer powerpro_quantity
+      +LargeBinary sentence_embedding
+      +String embedding_model
+    }
+    
+    %% Enum for label types
+    class LabelType {
+      <<enumeration>>
+      SALES_FUNNEL
+      SENTIMENT
+      INTENT
+      BUSINESS_IMPACT
+    }
+    
+    Sentence "1" -- "1" SentenceLabel : "has"
+    Sentence "1" -- "1" SentenceFeatures : "has"
+
 
 ## Labels Sneak Preview
 
