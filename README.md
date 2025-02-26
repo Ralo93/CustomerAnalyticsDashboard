@@ -110,7 +110,7 @@ flowchart TD
     class User,Dashboard user
 ```
 
-
+## Components
 
 ### API Gateway
 
