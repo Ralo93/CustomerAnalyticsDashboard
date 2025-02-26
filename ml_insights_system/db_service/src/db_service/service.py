@@ -980,6 +980,249 @@ async def get_product_mentions(
     return product_stats
 
 
+@app.get("/analytics/sentences-by-product-filter")
+async def get_sentences_by_product_filter(
+    mentions_masterblaster: Optional[bool] = None,
+    mentions_funpun: Optional[bool] = None,
+    mentions_powerpro: Optional[bool] = None,
+    min_masterblaster_quantity: Optional[int] = None,
+    min_funpun_quantity: Optional[int] = None,
+    min_powerpro_quantity: Optional[int] = None,
+    is_sales_funnel_relevant: Optional[bool] = None,
+    sentiment: Optional[str] = None,
+    business_impact: Optional[str] = None,
+    intent: Optional[str] = None,
+    limit: int = sys.maxsize,
+    db: Session = Depends(get_db)
+):
+    """Fetch sentences matching product mention criteria"""
+    # Start with a query that joins all necessary tables
+    query = db.query(models.Sentence).join(
+        models.SentenceFeatures, models.Sentence.id == models.SentenceFeatures.sentence_id
+    ).join(
+        models.SentenceLabel, models.Sentence.id == models.SentenceLabel.sentence_id
+    )
+    
+    # Apply product mention filters
+    if mentions_masterblaster is not None:
+        query = query.filter(models.SentenceFeatures.mentions_masterblaster == mentions_masterblaster)
+    
+    if mentions_funpun is not None:
+        query = query.filter(models.SentenceFeatures.mentions_funpun == mentions_funpun)
+    
+    if mentions_powerpro is not None:
+        query = query.filter(models.SentenceFeatures.mentions_powerpro == mentions_powerpro)
+    
+    # Apply product quantity filters
+    if min_masterblaster_quantity is not None and min_masterblaster_quantity > 0:
+        query = query.filter(models.SentenceFeatures.masterblaster_quantity >= min_masterblaster_quantity)
+    
+    if min_funpun_quantity is not None and min_funpun_quantity > 0:
+        query = query.filter(models.SentenceFeatures.funpun_quantity >= min_funpun_quantity)
+    
+    if min_powerpro_quantity is not None and min_powerpro_quantity > 0:
+        query = query.filter(models.SentenceFeatures.powerpro_quantity >= min_powerpro_quantity)
+    
+    # Apply other filters
+    if is_sales_funnel_relevant is not None:
+        query = query.filter(models.SentenceLabel.is_sales_funnel_relevant == is_sales_funnel_relevant)
+    
+    if sentiment:
+        query = query.filter(models.SentenceLabel.sentiment == sentiment)
+    
+    if business_impact:
+        query = query.filter(models.SentenceLabel.business_impact == business_impact)
+    
+    if intent:
+        query = query.filter(models.SentenceLabel.intent == intent)
+    
+    # Limit results and order by newest first
+    sentences = query.order_by(models.Sentence.created_at.desc()).limit(limit).all()
+    
+    # Return sentences with their label and feature information
+    results = []
+    for sentence in sentences:
+        label = db.query(models.SentenceLabel).filter(
+            models.SentenceLabel.sentence_id == sentence.id
+        ).first()
+        
+        features = db.query(models.SentenceFeatures).filter(
+            models.SentenceFeatures.sentence_id == sentence.id
+        ).first()
+        
+        results.append({
+            "id": sentence.id,
+            "text": sentence.text,
+            "created_at": sentence.created_at.isoformat(),
+            "is_sales_funnel_relevant": label.is_sales_funnel_relevant if label else None,
+            "sales_funnel_stage": label.sales_funnel_stage if label and label.is_sales_funnel_relevant else None,
+            "sentiment": label.sentiment if label else None,
+            "business_impact": label.business_impact if label else None,
+            "intent": label.intent if label else None,
+            "mentions_masterblaster": features.mentions_masterblaster if features else False,
+            "mentions_funpun": features.mentions_funpun if features else False,
+            "mentions_powerpro": features.mentions_powerpro if features else False,
+            "masterblaster_quantity": features.masterblaster_quantity if features and features.mentions_masterblaster else None,
+            "funpun_quantity": features.funpun_quantity if features and features.mentions_funpun else None,
+            "powerpro_quantity": features.powerpro_quantity if features and features.mentions_powerpro else None
+        })
+    
+    return results
+
+@app.get("/analytics/time-series-trends")
+async def get_time_series_trends(
+    start_external_id: Optional[int] = None,
+    end_external_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get trend data across a range of external_ids (proxy for time series)"""
+    # Initial query to get all sentences with their labels and features
+    base_query = db.query(
+        models.Sentence.external_id,
+        models.SentenceLabel.sentiment,
+        models.SentenceLabel.business_impact,
+        models.SentenceLabel.is_sales_funnel_relevant,
+        models.SentenceLabel.sales_funnel_stage,
+        models.SentenceFeatures.mentions_masterblaster,
+        models.SentenceFeatures.mentions_funpun,
+        models.SentenceFeatures.mentions_powerpro
+    ).join(
+        models.SentenceLabel, 
+        models.Sentence.id == models.SentenceLabel.sentence_id
+    ).outerjoin(
+        models.SentenceFeatures,
+        models.Sentence.id == models.SentenceFeatures.sentence_id
+    )
+    
+    # Get all sentences and filter in Python (more reliable than SQL for mixed string/int comparisons)
+    all_results = base_query.all()
+    
+    # Filter and sort numerically
+    filtered_results = []
+    for result in all_results:
+        try:
+            # Convert external_id to integer
+            ext_id = int(result.external_id)
+            
+            # Apply range filters if provided
+            if start_external_id is not None and ext_id < start_external_id:
+                continue
+            if end_external_id is not None and ext_id > end_external_id:
+                continue
+                
+            filtered_results.append((ext_id, result))
+        except (ValueError, TypeError):
+            # Skip results with non-numeric external_ids
+            logger.warning(f"Skipping non-numeric external_id: {result.external_id}")
+            continue
+    
+    # Sort numerically by the integer value of external_id
+    sorted_results = sorted(filtered_results, key=lambda pair: pair[0])
+    
+    if not sorted_results:
+        return {
+            "time_points": [],
+            "sentiment_trends": [],
+            "product_trends": [],
+            "impact_trends": [],
+            "funnel_stage_trends": []
+        }
+    
+    # No bucketing - use every data point in the filtered range
+    time_points = [pair[0] for pair in sorted_results]
+    individual_results = [pair[1] for pair in sorted_results]
+    
+    # Process each data point individually
+    sentiment_trends = []
+    product_trends = []
+    impact_trends = []
+    funnel_stage_trends = []
+    
+    for result in individual_results:
+        # Calculate sentiment data for this point
+        sentiment_trends.append({
+            'positive': 1 if result.sentiment == 'Positive' else 0,
+            'negative': 1 if result.sentiment == 'Negative' else 0,
+            'neutral': 1 if result.sentiment == 'Neutral' else 0,
+            'total': 1
+        })
+        
+        # Calculate product mention data for this point
+        product_trends.append({
+            'masterblaster': 1 if result.mentions_masterblaster else 0,
+            'funpun': 1 if result.mentions_funpun else 0,
+            'powerpro': 1 if result.mentions_powerpro else 0,
+            'any_product': 1 if (result.mentions_masterblaster or result.mentions_funpun or result.mentions_powerpro) else 0,
+            'total': 1
+        })
+        
+        # Calculate business impact data for this point
+        impact_trends.append({
+            'high': 1 if result.business_impact == 'High' else 0,
+            'medium': 1 if result.business_impact == 'Medium' else 0,
+            'low': 1 if result.business_impact == 'Low' else 0,
+            'neutral': 1 if result.business_impact == 'Neutral' else 0,
+            'total': 1
+        })
+        
+        # Calculate sales funnel stage data for this point (only if relevant)
+        # For non-relevant sentences, all stage counts are 0
+        is_relevant = result.is_sales_funnel_relevant
+        funnel_stage_trends.append({
+            'awareness': 1 if (is_relevant and result.sales_funnel_stage == 'Awareness') else 0,
+            'interest': 1 if (is_relevant and result.sales_funnel_stage == 'Interest') else 0,
+            'consideration': 1 if (is_relevant and result.sales_funnel_stage == 'Consideration') else 0,
+            'intent': 1 if (is_relevant and result.sales_funnel_stage == 'Intent') else 0,
+            'evaluation': 1 if (is_relevant and result.sales_funnel_stage == 'Evaluation') else 0,
+            'purchase': 1 if (is_relevant and result.sales_funnel_stage == 'Purchase') else 0,
+            'total': 1 if is_relevant else 0
+        })
+    
+    # Return all trend data
+    return {
+        "time_points": time_points,
+        "sentiment_trends": sentiment_trends,
+        "product_trends": product_trends,
+        "impact_trends": impact_trends,
+        "funnel_stage_trends": funnel_stage_trends
+    }
+
+@app.get("/analytics/external-id-range")
+async def get_external_id_range(db: Session = Depends(get_db)):
+    """Get the range of external_ids available in the database"""
+    # Get all external IDs
+    external_ids = db.query(models.Sentence.external_id).all()
+    
+    # Extract and convert to integers where possible
+    numeric_ids = []
+    for id_tuple in external_ids:
+        try:
+            numeric_ids.append(int(id_tuple[0]))
+        except (ValueError, TypeError):
+            # Skip IDs that can't be converted
+            logger.warning(f"Skipping non-numeric external_id: {id_tuple[0]}")
+    
+    if not numeric_ids:
+        return {
+            "min_id": 0,
+            "max_id": 0,
+            "count": 0
+        }
+    
+    # Sort numerically and get min/max
+    numeric_ids.sort()
+    min_id = numeric_ids[0]
+    max_id = numeric_ids[-1]
+    
+    # Get total count
+    count = len(numeric_ids)
+    
+    return {
+        "min_id": min_id,
+        "max_id": max_id,
+        "count": count
+    }
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint to verify service is running"""

@@ -1,3 +1,4 @@
+import hashlib
 import time
 import streamlit as st
 import pandas as pd
@@ -499,48 +500,242 @@ def render_sentiment_distribution(df, all_sentences):
     
     filtered_sentences = filter_sentences(all_sentences, filters)
     display_sentence_details(filtered_sentences)
-
 def render_impact_scores(df, all_sentences):
-    """Visualize average impact scores per stage"""
+    """Visualize average impact scores per stage with enhanced interpretability"""
     if df.empty:
         st.warning("No impact score data available")
         return
 
-    st.subheader("Average Impact Scores by Sales Funnel Stage")
-    st.info("This chart only shows data for sales funnel relevant sentences")
+    st.subheader("Business Impact Analysis by Sales Funnel Stage")
     
-    # Create bar chart
-    chart = alt.Chart(df).mark_bar().encode(
-        x=alt.X('sales_funnel_stage:N', title='Sales Funnel Stage'),
-        y=alt.Y('average_impact:Q', title='Average Impact Score'),
-        color=alt.Color('average_impact:Q', scale=alt.Scale(scheme='viridis')),
+    # Explanation of what impact scores mean
+    with st.expander("📊 Understanding Business Impact Scores", expanded=True):
+        st.markdown("""
+        **What are Business Impact Scores?**
+        
+        Business impact scores quantify the potential effect of customer sentences on the business:
+        
+        - **1.0**: Low impact - Minimal effect on business operations or decisions
+        - **2.0**: Medium impact - Moderate effect that may warrant attention
+        - **3.0**: High impact - Significant effect requiring attention or action
+        - **1.5**: Neutral impact - Neither positive nor negative effect
+        
+        Higher scores indicate areas where customer feedback could have stronger business implications.
+        """)
+    
+    # Create a metrics row to highlight key insights
+    col1, col2, col3 = st.columns(3)
+    
+    # Calculate overall average impact
+    overall_avg = (df['average_impact'] * df['count']).sum() / df['count'].sum() if df['count'].sum() > 0 else 0
+    
+    # Find highest and lowest impact stages
+    highest_impact_stage = df.loc[df['average_impact'].idxmax()] if not df.empty else None
+    lowest_impact_stage = df.loc[df['average_impact'].idxmin()] if not df.empty else None
+    
+    with col1:
+        st.metric(
+            "Overall Average Impact", 
+            f"{overall_avg:.2f}", 
+            help="Weighted average impact score across all funnel stages"
+        )
+    
+    with col2:
+        if highest_impact_stage is not None:
+            st.metric(
+                "Highest Impact Stage", 
+                f"{highest_impact_stage['sales_funnel_stage']}", 
+                f"{highest_impact_stage['average_impact']:.2f}",
+                help="Stage with the highest average impact score"
+            )
+    
+    with col3:
+        if lowest_impact_stage is not None:
+            st.metric(
+                "Lowest Impact Stage", 
+                f"{lowest_impact_stage['sales_funnel_stage']}", 
+                f"{lowest_impact_stage['average_impact']:.2f}",
+                help="Stage with the lowest average impact score"
+            )
+    
+    # Add a note about the data
+    st.info("This analysis only includes sales funnel relevant sentences. Impact scores range from 1.0 (Low) to 3.0 (High).")
+    
+    # Define a custom color scheme
+    color_scale = alt.Scale(
+        domain=[1, 1.5, 2, 3],
+        range=['#4575b4', '#91bfdb', '#fee090', '#d73027']
+    )
+    
+    # Create enhanced bar chart with reference lines
+    base = alt.Chart(df).encode(
+        x=alt.X('sales_funnel_stage:N', 
+                title='Sales Funnel Stage',
+                sort=None),  # Preserve original order
         tooltip=[
             alt.Tooltip('sales_funnel_stage:N', title='Stage'),
             alt.Tooltip('average_impact:Q', format='.2f', title='Avg Impact'),
-            alt.Tooltip('count:Q', format=',', title='Count')
+            alt.Tooltip('count:Q', format=',', title='Sentence Count')
         ]
-    ).properties(
+    )
+    
+    # Add reference lines for impact levels
+    rule_high = alt.Chart(pd.DataFrame({'y': [2.5]})).mark_rule(
+        strokeDash=[12, 6],
+        strokeWidth=1,
+        color='#d73027'
+    ).encode(y='y:Q')
+    
+    rule_medium = alt.Chart(pd.DataFrame({'y': [1.75]})).mark_rule(
+        strokeDash=[12, 6],
+        strokeWidth=1,
+        color='#fee090'
+    ).encode(y='y:Q')
+    
+    # Add text labels for reference lines
+    text_high = alt.Chart(pd.DataFrame({'y': [2.5], 'text': ['High Impact Threshold']})).mark_text(
+        align='left',
+        baseline='bottom',
+        dx=5,
+        fontSize=11,
+        color='#d73027'
+    ).encode(y='y:Q', text='text:N')
+    
+    text_medium = alt.Chart(pd.DataFrame({'y': [1.75], 'text': ['Medium Impact Threshold']})).mark_text(
+        align='left',
+        baseline='bottom',
+        dx=5,
+        fontSize=11,
+        color='#fee090'
+    ).encode(y='y:Q', text='text:N')
+    
+    # Create the bars with extra encoding
+    bars = base.mark_bar().encode(
+        y=alt.Y('average_impact:Q', 
+                title='Average Business Impact Score',
+                scale=alt.Scale(domain=[0.8, 3.2])),  # Adjusted scale to show thresholds
+        color=alt.Color('average_impact:Q', 
+                        scale=color_scale,
+                        legend=alt.Legend(title="Impact Level")),
+        size=alt.Size('count:Q', 
+                     scale=alt.Scale(range=[30, 60]),
+                     legend=alt.Legend(title="Sentence Count"))
+    )
+    
+    # Add counts as text on top of bars
+    text = base.mark_text(
+        align='center',
+        baseline='bottom',
+        dy=-5
+    ).encode(
+        y=alt.Y('average_impact:Q'),
+        text=alt.Text('count:Q', format=','),
+        color=alt.value('black')
+    )
+    
+    # Combine all chart elements
+    chart = (bars + text + rule_high + rule_medium + text_high + text_medium).properties(
         width=600,
-        height=400
+        height=400,
+        title="Average Business Impact by Sales Funnel Stage"
     ).interactive()
 
     # Display the chart
     st.altair_chart(chart, use_container_width=True)
     
-    # Filter selection
-    selected_stage = st.selectbox(
-        "Select Stage to View Sentences",
-        options=["All"] + sorted(df['sales_funnel_stage'].unique().tolist()),
-        key="impact_stage_select"
-    )
+    # Business insights based on data
+    highest_volume_stage = df.loc[df['count'].idxmax()] if not df.empty else None
+    
+    if highest_impact_stage is not None and highest_volume_stage is not None:
+        st.subheader("Key Insights")
+        
+        insights_col1, insights_col2 = st.columns(2)
+        
+        with insights_col1:
+            st.markdown(f"""
+            **High Impact Areas:**
+            
+            The **{highest_impact_stage['sales_funnel_stage']}** stage shows the highest average impact score 
+            ({highest_impact_stage['average_impact']:.2f}), suggesting customer interactions at this stage have 
+            significant business implications.
+            
+            **Recommendation:** Prioritize reviewing and responding to feedback in this stage.
+            """)
+        
+        with insights_col2:
+            st.markdown(f"""
+            **Volume Considerations:**
+            
+            The **{highest_volume_stage['sales_funnel_stage']}** stage has the highest volume 
+            of interactions ({highest_volume_stage['count']} sentences).
+            
+            **Recommendation:** Ensure adequate resources are allocated to handle the volume of interactions
+            at this stage.
+            """)
+    
+    # Enhanced filtering options
+    st.subheader("Explore Sentences by Impact")
+    
+    # Create two columns for filters
+    filter_col1, filter_col2 = st.columns(2)
+    
+    with filter_col1:
+        selected_stage = st.selectbox(
+            "Select Sales Funnel Stage",
+            options=["All"] + sorted(df['sales_funnel_stage'].unique().tolist()),
+            key="impact_stage_select"
+        )
+    
+    with filter_col2:
+        # Add impact level filter
+        impact_levels = {
+            "All Levels": None,
+            "High Impact (2.5+)": "High",
+            "Medium Impact (1.75-2.5)": "Medium",
+            "Low Impact (<1.75)": "Low",
+            "Neutral Impact": "Neutral"
+        }
+        
+        selected_impact = st.selectbox(
+            "Filter by Impact Level",
+            options=list(impact_levels.keys()),
+            key="impact_level_select"
+        )
+    
+    # Additional filters
+    with st.expander("Additional Filters"):
+        sentiment_filter = st.selectbox(
+            "Filter by Sentiment",
+            options=["All", "Positive", "Negative", "Neutral"],
+            key="impact_sentiment_filter"
+        )
     
     # Use client-side filtering
     filters = {'is_sales_funnel_relevant': True}  # Always filter for relevant sentences
+    
     if selected_stage and selected_stage != "All":
         filters['sales_funnel_stage'] = selected_stage
     
+    if selected_impact != "All Levels":
+        filters['business_impact'] = impact_levels[selected_impact]
+    
+    if sentiment_filter != "All":
+        filters['sentiment'] = sentiment_filter
+    
+    # Filter and display sentences
     filtered_sentences = filter_sentences(all_sentences, filters)
-    display_sentence_details(filtered_sentences)
+    
+    if filtered_sentences:
+        st.success(f"Found {len(filtered_sentences)} sentences matching your criteria.")
+        display_sentence_details(filtered_sentences)
+    else:
+        st.info("No sentences found matching your criteria. Try adjusting the filters.")
+    
+    # Add a contextual note at the bottom
+    st.markdown("""
+    **Note:** Business impact scores help prioritize which customer interactions need immediate attention. 
+    High impact sentences often indicate opportunities for improvement or areas of potential risk.
+    """)
 
 
 def render_sentiment_impact(df, all_sentences):
@@ -1104,8 +1299,9 @@ def render_impact_information(df, all_sentences):
     
     filtered_sentences = filter_sentences(all_sentences, filters)
     display_sentence_details(filtered_sentences)
+
 def render_product_mentions(df, all_sentences):
-    """Visualize product mention statistics"""
+    """Visualize product mention statistics with enhanced filtering"""
     # Setup logging
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
@@ -1268,8 +1464,8 @@ def render_product_mentions(df, all_sentences):
         percentage_with_product = (with_any_product / total_sentences * 100) if total_sentences > 0 else 0
         st.metric("Sentences with Products", f"{with_any_product:,}", f"{percentage_with_product:.1f}%")
     
-    with col3:
-        st.metric("Multiple Product Mentions", f"{with_multiple:,}")
+    #with col3:
+    #    st.metric("Multiple Product Mentions", f"{with_multiple:,}")
     
     # Visualization
     try:
@@ -1364,70 +1560,721 @@ def render_product_mentions(df, all_sentences):
             max_qty = product_df['Max Quantity'].max()
             st.metric("Overall Maximum Quantity", f"{max_qty:.0f}")
     
-    # Sentence filtering section with corrected filter keys
-    st.subheader("Product Sentences")
+    # NEW SECTION FOR SPECIALIZED FILTERING
+    st.markdown("---")
+    st.subheader("Product Sentence Finder")
+    st.markdown("Use the filters below to find sentences mentioning specific products.")
     
-    # Create a session state key to remember the selection
-    if 'product_selection' not in st.session_state:
-        st.session_state.product_selection = "All"
+    # Create filter controls in two columns
+    col1, col2 = st.columns(2)
     
-    # Use the session state for the selectbox default value
-    selected_product = st.selectbox(
-        "Select Product to View Sentences",
-        options=["All"] + product_names,
-        key="product_mentions_select",
-        index=0 if st.session_state.product_selection == "All" else 1 + product_names.index(st.session_state.product_selection)
-    )
+    with col1:
+        selected_product = st.selectbox(
+            "Filter by Product",
+            options=["All", "MasterBlaster", "FunPun", "PowerPro"],
+            key="product_filter_selectbox"
+        )
     
-    # Update session state
-    st.session_state.product_selection = selected_product
+    with col2:
+        min_quantity = st.number_input(
+            "Minimum Quantity",
+            min_value=0,
+            value=0,
+            key="product_min_quantity"
+        )
     
-    # Modify filtering logic to use the correct filter keys
-    # With this:
-    filters = {}
-    if selected_product != "All":
-        # Convert product name to key format (remove spaces and lowercase)
-        product_key = selected_product.lower().replace(' ', '')
+    # Create additional filter options
+    with st.expander("Additional Filters"):
+        relevance_filter = st.radio(
+            "Filter by Sales Funnel Relevance",
+            ["All", "Relevant Only", "Non-Relevant Only"],
+            horizontal=True,
+            key="product_relevance_filter"
+        )
         
-        # Based on the logs, the correct filter key is 'mentions_productname'
-        filter_key = f'mentions_{product_key}'
-        filters[filter_key] = True
+        sentiment_filter = st.selectbox(
+            "Filter by Sentiment",
+            options=["All", "Positive", "Negative", "Neutral"],
+            key="product_sentiment_filter"
+        )
         
-        # Add debugging to check if this key exists in the sentences
-        if all_sentences and len(all_sentences) > 0:
-            sample_sentence = all_sentences[0]
-            key_exists = filter_key in sample_sentence
-            logger.debug(f"Filter key '{filter_key}' exists in sample sentence: {key_exists}")
-            logger.debug(f"Available keys in sample sentence: {list(sample_sentence.keys())}")
+        impact_filter = st.selectbox(
+            "Filter by Business Impact",
+            options=["All", "High", "Medium", "Low", "Neutral"],
+            key="product_impact_filter"
+        )
+    
+    # Apply filter button
+    filter_clicked = st.button("Find Matching Sentences")
+    
+    if filter_clicked:
+        # Prepare filter parameters for the API call
+        params = {}
         
-        logger.debug(f"Filtering with: {filters}")
-    
-    # Create a container for the filtered sentences to prevent page jumping
-    sentence_container = st.container()
-    
-    with sentence_container:
-        # Filter and display sentences
-        if filters:
-            # Check if filter keys exist in the sentence data
-            if all_sentences and len(all_sentences) > 0:
-                sample_keys = list(all_sentences[0].keys())
-                logger.debug(f"Available sentence keys: {sample_keys}")
+        # Product filters
+        if selected_product != "All":
+            product_key = f"mentions_{selected_product.lower()}"
+            params[product_key] = True
             
-            filtered_sentences = filter_sentences(all_sentences, filters)
+            if min_quantity > 0:
+                params[f"min_{selected_product.lower()}_quantity"] = min_quantity
+        
+        # Relevance filter
+        if relevance_filter == "Relevant Only":
+            params["is_sales_funnel_relevant"] = True
+        elif relevance_filter == "Non-Relevant Only":
+            params["is_sales_funnel_relevant"] = False
+        
+        # Sentiment filter
+        if sentiment_filter != "All":
+            params["sentiment"] = sentiment_filter
             
-            # Log how many sentences were found
-            logger.debug(f"Found {len(filtered_sentences)} sentences matching filters: {filters}")
+        # Business impact filter
+        if impact_filter != "All":
+            params["business_impact"] = impact_filter
+        
+        # Show loading indicator
+        with st.spinner("Fetching sentences..."):
+            # Create a cache key based on the parameters
+            param_str = json.dumps(params, sort_keys=True)
+            cache_key = f"ml_insights:product_sentences:{hashlib.md5(param_str.encode()).hexdigest()}"
             
-            if len(filtered_sentences) == 0:
-                st.warning(f"No sentences found mentioning {selected_product}")
+            # Check if we have this in cache first
+            filtered_sentences = None
+            if redis_client:
+                cached_data = redis_client.get(cache_key)
+                if cached_data:
+                    logger.info("Retrieved filtered product sentences from Redis cache")
+                    filtered_sentences = json.loads(cached_data)
+            
+            # If not in cache, fetch from API
+            if not filtered_sentences:
+                try:
+                    with httpx.Client(timeout=10.0) as client:
+                        response = client.get(f"{DB_SERVICE_URL}/analytics/sentences-by-product-filter", params=params)
+                        
+                        if response.status_code != 200:
+                            logger.error(f"Failed to fetch filtered sentences: {response.status_code}")
+                            st.error("Failed to fetch sentences. Please try again.")
+                            return
+                        
+                        filtered_sentences = response.json()
+                        
+                        # Cache the results
+                        if redis_client:
+                            try:
+                                redis_client.setex(
+                                    cache_key,
+                                    CACHE_EXPIRY,
+                                    json.dumps(filtered_sentences)
+                                )
+                                logger.info(f"Cached filtered product sentences for {CACHE_EXPIRY} seconds")
+                            except Exception as cache_error:
+                                logger.error(f"Failed to cache filtered sentences: {cache_error}")
+                                
+                except Exception as e:
+                    logger.error(f"Error fetching filtered sentences: {e}")
+                    st.error(f"An error occurred: {str(e)}")
+                    return
+            
+            # Display the filtered sentences
+            if not filtered_sentences:
+                st.info("No sentences found matching your filter criteria.")
             else:
-                st.success(f"Found {len(filtered_sentences)} sentences mentioning {selected_product}")
+                st.success(f"Found {len(filtered_sentences)} sentences matching your filter criteria.")
                 display_sentence_details(filtered_sentences)
+    else:
+        # If no search performed yet, show a prompt
+        st.info("Use the filters above and click 'Find Matching Sentences' to see product-related sentences.")
+        
+    # Display a note about the filtering
+    st.markdown("""
+    **Note:** This search uses advanced product-specific filtering from the sentence features table, 
+    allowing you to find sentences based on the products they mention and quantities.
+    """)
+def render_trends_tab():
+    """Render the Time Series Trends tab (tab9) with focus on trend visualization"""
+    #st.subheader("Time Series Trends Analysis")
+    #st.markdown("""
+    #This tab analyzes customer interaction trends over time, using external_id as a sequence number.
+    #""")
+    
+    # Initialize session state for period selection if not already set
+    if 'selected_period' not in st.session_state:
+        st.session_state.selected_period = 'all'
+    
+    # Fetch the external ID range
+    try:
+        # Check cache first
+        id_range = None
+        cache_key = "ml_insights:external_id_range"
+        
+        if redis_client:
+            cached_data = redis_client.get(cache_key)
+            if cached_data:
+                logger.info("Retrieved external ID range from Redis cache")
+                id_range = json.loads(cached_data)
+        
+        # If not in cache, fetch from API
+        if not id_range:
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(f"{DB_SERVICE_URL}/analytics/external-id-range")
+                
+                if response.status_code != 200:
+                    logger.error(f"Failed to fetch external ID range: {response.status_code}")
+                    st.error("Failed to fetch external ID range. Please try again later.")
+                    return
+                
+                id_range = response.json()
+                
+                # Cache the result
+                if redis_client:
+                    try:
+                        redis_client.setex(
+                            cache_key,
+                            CACHE_EXPIRY,
+                            json.dumps(id_range)
+                        )
+                        logger.info(f"Cached external ID range for {CACHE_EXPIRY} seconds")
+                    except Exception as cache_error:
+                        logger.error(f"Failed to cache external ID range: {cache_error}")
+        
+        min_id = id_range.get('min_id', 0)
+        max_id = id_range.get('max_id', 0)
+        count = id_range.get('count', 0)
+        
+    except Exception as e:
+        logger.error(f"Error fetching external ID range: {str(e)}")
+        st.error("Failed to load data range. Please try again later.")
+        return
+    
+    # Create more compact filter buttons
+    st.markdown("### Select Time Period")
+    
+    # Use a container with custom CSS for more compact buttons
+    filter_container = st.container()
+    
+    # Create a more compact button layout
+    button_cols = filter_container.columns([1, 1, 1, 3])  # The last column is for spacing
+    
+    # Define a callback for when a period button is clicked
+    def on_period_click(period):
+        st.session_state.selected_period = period
+        st.session_state.period_changed = True
+    
+    # Create compact, adjacent buttons
+    with button_cols[0]:
+        last7_selected = st.session_state.selected_period == 'last7'
+        st.button(
+            "7 days", 
+            key="btn_last7", 
+            type="primary" if last7_selected else "secondary",
+            on_click=on_period_click,
+            args=('last7',),
+            use_container_width=True
+        )
+    
+    with button_cols[1]:
+        last30_selected = st.session_state.selected_period == 'last30'
+        st.button(
+            "30 days", 
+            key="btn_last30", 
+            type="primary" if last30_selected else "secondary",
+            on_click=on_period_click,
+            args=('last30',),
+            use_container_width=True
+        )
+    
+    with button_cols[2]:
+        all_selected = st.session_state.selected_period == 'all'
+        st.button(
+            "All time", 
+            key="btn_all", 
+            type="primary" if all_selected else "secondary",
+            on_click=on_period_click,
+            args=('all',),
+            use_container_width=True
+        )
+    
+    # Calculate ID range based on selection
+    start_id = None
+    if st.session_state.selected_period == 'last7':
+        start_id = max(min_id, max_id - 6)
+    elif st.session_state.selected_period == 'last30':
+        start_id = max(min_id, max_id - 29)
+    else:
+        # For 'all', use the full range
+        start_id = min_id
+    
+    # Make sure end_id is always max_id
+    end_id = max_id
+    
+    # Display selection
+    if st.session_state.selected_period == 'last7':
+        time_range_text = f"Analyzing last 7 interactions (ID {start_id} to {end_id})"
+    elif st.session_state.selected_period == 'last30':
+        time_range_text = f"Analyzing last 30 interactions (ID {start_id} to {end_id})"
+    else:
+        time_range_text = f"Analyzing all interactions (ID {min_id} to {end_id})"
+    
+    st.markdown(f"**{time_range_text}**")
+    
+    # Add a refresh button for data reload
+    st.button("🔄 Refresh Data", key="refresh_trends", help="Reload the trend data from the server")
+    
+    # Fetch time series trends data
+    cache_key = f"ml_insights:time_series:{st.session_state.selected_period}"
+    
+    # Check if we should skip cache (when refresh is clicked)
+    skip_cache = False
+    if st.session_state.get('period_changed', False) or st.session_state.get('refresh_clicked', False):
+        skip_cache = True
+        # Reset states after use
+        st.session_state.period_changed = False
+        st.session_state.refresh_clicked = False
+    
+    # Check cache first (unless we're forcing a refresh)
+    trend_data = None
+    if redis_client and not skip_cache:
+        cached_data = redis_client.get(cache_key)
+        if cached_data:
+            logger.info(f"Retrieved time series trends from cache for {st.session_state.selected_period}")
+            trend_data = json.loads(cached_data)
+    
+    # If not in cache, fetch from API
+    if not trend_data:
+        with st.spinner("Loading trend data..."):
+            try:
+                with httpx.Client(timeout=15.0) as client:
+                    params = {}
+                    if start_id is not None:
+                        params["start_external_id"] = start_id
+                    if end_id is not None:
+                        params["end_external_id"] = end_id
+                    
+                    response = client.get(f"{DB_SERVICE_URL}/analytics/time-series-trends", params=params)
+                    
+                    if response.status_code != 200:
+                        logger.error(f"Failed to fetch time series trends: {response.status_code}")
+                        st.error("Failed to load trend data. Please try again later.")
+                        return
+                    
+                    trend_data = response.json()
+                    
+                    # Cache the result
+                    if redis_client:
+                        try:
+                            redis_client.setex(
+                                cache_key,
+                                CACHE_EXPIRY,
+                                json.dumps(trend_data)
+                            )
+                            logger.info(f"Cached time series trends for {CACHE_EXPIRY} seconds")
+                        except Exception as cache_error:
+                            logger.error(f"Failed to cache time series trends: {cache_error}")
+            except Exception as e:
+                logger.error(f"Error fetching time series trends: {str(e)}")
+                st.error("Failed to load trend data. Please try again later.")
+                return
+    
+    # Check if we have data to display
+    if not trend_data or not trend_data.get('time_points'):
+        st.warning("No trend data available for the selected period.")
+        return
+    
+    # Extract data for visualization
+    time_points = trend_data.get('time_points', [])
+    
+    # Make sure time_points are properly formatted for display
+    # Convert numbers to strings for display
+    formatted_time_points = [str(point) for point in time_points]
+    
+    # Create tabs for different trend visualizations
+    trend_tabs = st.tabs([
+        "Sentiment Trends", 
+        "Product Mention Trends", 
+        "Business Impact Trends",
+        "Sales Funnel Trends"
+    ])
+    
+    # 1. Sentiment Trends Tab
+    with trend_tabs[0]:
+        #st.subheader("Sentiment Trends Over Time")
+        
+        # Prepare data for chart - with more focus on trends
+        sentiment_data = []
+        for i, point in enumerate(formatted_time_points):
+            sentiment_counts = trend_data.get('sentiment_trends', [])[i]
+            total = sentiment_counts.get('total', 1)  # Avoid division by zero
+            
+            sentiment_data.append({
+                'time_point': point,
+                'time_index': i,  # Add index for trend line
+                'Positive': sentiment_counts.get('positive', 0),
+                'Negative': sentiment_counts.get('negative', 0),
+                'Neutral': sentiment_counts.get('neutral', 0),
+                'Positive %': round(sentiment_counts.get('positive', 0) / total * 100, 1) if total > 0 else 0,
+                'Negative %': round(sentiment_counts.get('negative', 0) / total * 100, 1) if total > 0 else 0,
+                'Neutral %': round(sentiment_counts.get('neutral', 0) / total * 100, 1) if total > 0 else 0
+            })
+        
+        sentiment_df = pd.DataFrame(sentiment_data)
+        
+        # Calculate summary statistics for sentiment
+        avg_positive = sentiment_df['Positive %'].mean()
+        avg_negative = sentiment_df['Negative %'].mean()
+        avg_neutral = sentiment_df['Neutral %'].mean()
+        
+        # Calculate total counts
+        total_positive = sentiment_df['Positive'].sum()
+        total_negative = sentiment_df['Negative'].sum()
+        total_neutral = sentiment_df['Neutral'].sum()
+        
+        # Calculate positive to negative ratio
+        if total_negative > 0:
+            pos_neg_ratio = total_positive / total_negative
         else:
-            # If no filters, show all sentences
-            st.info("Showing all sentences")
-            display_sentence_details(all_sentences)
+            pos_neg_ratio = total_positive if total_positive > 0 else 0
+        
+        # Display sentiment summary statistics
+        st.markdown("#### Summary Statistics")
+        
+        # Use columns for a clean layout
+        stat_cols = st.columns(4)
+        
+        with stat_cols[0]:
+            st.metric("Avg Positive", f"{avg_positive:.1f}%")
+        
+        with stat_cols[1]:
+            st.metric("Avg Negative", f"{avg_negative:.1f}%")
+        
+        with stat_cols[2]:
+            st.metric("Avg Neutral", f"{avg_neutral:.1f}%")
+        
+        with stat_cols[3]:
+            st.metric("Pos/Neg Ratio", f"{pos_neg_ratio:.2f}")
+        
+        # Reshape for percentage chart (focusing on trends)
+        sentiment_pct_df = pd.melt(
+            sentiment_df,
+            id_vars=['time_point', 'time_index'],
+            value_vars=['Positive %', 'Negative %', 'Neutral %'],
+            var_name='Sentiment',
+            value_name='Percentage'
+        )
+        
+        # Create a larger, more prominent trend visualization
+        sentiment_chart = alt.Chart(sentiment_pct_df).mark_line(
+            point=True,
+            strokeWidth=3,  # Thicker lines for better visibility
+        ).encode(
+            x=alt.X('time_point:N', 
+                   title='Time (External ID)', 
+                   sort=None,
+                   axis=alt.Axis(labelAngle=-45)),  # Angled labels for better readability
+            y=alt.Y('Percentage:Q', 
+                   title='Percentage', 
+                   scale=alt.Scale(domain=[0, 100])),
+            color=alt.Color('Sentiment:N', 
+                          legend=alt.Legend(title="Sentiment"),
+                          scale=alt.Scale(
+                              domain=['Positive %', 'Negative %', 'Neutral %'],
+                              range=['#2ecc71', '#e74c3c', '#95a5a6']
+                          )),
+            tooltip=['time_point:N', 'Sentiment:N', 'Percentage:Q']
+        ).properties(
+            width='container',
+            height=400  # Taller chart for better trend visibility
+        ).interactive()
+        
+        # Display the chart
+        st.altair_chart(sentiment_chart, use_container_width=True)
+    
+    # 2. Product Mention Trends Tab
+    with trend_tabs[1]:
+        #st.subheader("Product Mention Trends Over Time")
+        
+        # Prepare data with focus on trends
+        product_data = []
+        for i, point in enumerate(formatted_time_points):
+            product_counts = trend_data.get('product_trends', [])[i]
+            total = product_counts.get('total', 1)  # Avoid division by zero
+            
+            product_data.append({
+                'time_point': point,
+                'time_index': i,  # Add index for trend line
+                'MasterBlaster': product_counts.get('masterblaster', 0),
+                'FunPun': product_counts.get('funpun', 0),
+                'PowerPro': product_counts.get('powerpro', 0),
+                'Any Product': product_counts.get('any_product', 0),
+                'MasterBlaster %': round(product_counts.get('masterblaster', 0) / total * 100, 1) if total > 0 else 0,
+                'FunPun %': round(product_counts.get('funpun', 0) / total * 100, 1) if total > 0 else 0,
+                'PowerPro %': round(product_counts.get('powerpro', 0) / total * 100, 1) if total > 0 else 0
+            })
+        
+        product_df = pd.DataFrame(product_data)
+        
+        # Calculate summary statistics for product mentions
+        total_mb = product_df['MasterBlaster'].sum()
+        total_fp = product_df['FunPun'].sum()
+        total_pp = product_df['PowerPro'].sum()
+        total_any = product_df['Any Product'].sum()
+        
+        total_interactions = sum(trend_data.get('sentiment_trends', [])[i].get('total', 0) for i in range(len(time_points)))
+        pct_with_products = (total_any / total_interactions * 100) if total_interactions > 0 else 0
+        
+        # Display product mention summary statistics
+        st.markdown("#### Summary Statistics")
+        
+        # Use columns for a clean layout
+        stat_cols = st.columns(4)
+        
+        with stat_cols[0]:
+            st.metric("MasterBlaster", total_mb)
+        
+        with stat_cols[1]:
+            st.metric("FunPun", total_fp)
+        
+        with stat_cols[2]:
+            st.metric("PowerPro", total_pp)
+        
+        with stat_cols[3]:
+            st.metric("With Products", f"{pct_with_products:.1f}%")
+        
+        # Reshape for percentage chart (focusing on trends)
+        product_pct_df = pd.melt(
+            product_df,
+            id_vars=['time_point', 'time_index'],
+            value_vars=['MasterBlaster %', 'FunPun %', 'PowerPro %'],
+            var_name='Product',
+            value_name='Percentage'
+        )
+        
+        # Create a larger, more prominent trend visualization
+        product_chart = alt.Chart(product_pct_df).mark_line(
+            point=True,
+            strokeWidth=3  # Thicker lines for better visibility
+        ).encode(
+            x=alt.X('time_point:N', 
+                   title='Time (External ID)', 
+                   sort=None,
+                   axis=alt.Axis(labelAngle=-45)),  # Angled labels for better readability
+            y=alt.Y('Percentage:Q', 
+                   title='Percentage', 
+                   scale=alt.Scale(domain=[0, 100])),
+            color=alt.Color('Product:N', 
+                          legend=alt.Legend(title="Product"),
+                          scale=alt.Scale(scheme='category10')),
+            tooltip=['time_point:N', 'Product:N', 'Percentage:Q']
+        ).properties(
+            width='container',
+            height=400  # Taller chart for better trend visibility
+        ).interactive()
+        
+        # Display the chart
+        st.altair_chart(product_chart, use_container_width=True)
+    
+    # 3. Business Impact Trends Tab
+    with trend_tabs[2]:
+        #st.subheader("Business Impact Trends Over Time")
+        
+        # Prepare data with focus on trends
+        impact_data = []
+        for i, point in enumerate(formatted_time_points):
+            impact_counts = trend_data.get('impact_trends', [])[i]
+            total = impact_counts.get('total', 1)  # Avoid division by zero
+            
+            # Calculate impact score for this point (weighted average)
+            weights = {'high': 3, 'medium': 2, 'low': 1, 'neutral': 0}
+            impact_score = sum(impact_counts.get(k, 0) * weights[k] for k in weights) / total if total > 0 else 0
+            
+            impact_data.append({
+                'time_point': point,
+                'time_index': i,  # Add index for trend line
+                'High': impact_counts.get('high', 0),
+                'Medium': impact_counts.get('medium', 0),
+                'Low': impact_counts.get('low', 0),
+                'Neutral': impact_counts.get('neutral', 0),
+                'Impact Score': round(impact_score, 2),
+                'High %': round(impact_counts.get('high', 0) / total * 100, 1) if total > 0 else 0,
+                'Medium %': round(impact_counts.get('medium', 0) / total * 100, 1) if total > 0 else 0,
+                'Low %': round(impact_counts.get('low', 0) / total * 100, 1) if total > 0 else 0,
+                'Neutral %': round(impact_counts.get('neutral', 0) / total * 100, 1) if total > 0 else 0
+            })
+        
+        impact_df = pd.DataFrame(impact_data)
+        
+        # Calculate summary statistics for business impact
+        total_high = impact_df['High'].sum()
+        total_medium = impact_df['Medium'].sum()
+        total_low = impact_df['Low'].sum()
+        total_neutral = impact_df['Neutral'].sum()
+        
+        total_impacts = total_high + total_medium + total_low + total_neutral
+        pct_high = (total_high / total_impacts * 100) if total_impacts > 0 else 0
+        pct_medium = (total_medium / total_impacts * 100) if total_impacts > 0 else 0
+        
+        avg_impact_score = impact_df['Impact Score'].mean()
+        
+        # Display business impact summary statistics
+        st.markdown("#### Summary Statistics")
+        
+        # Use columns for a clean layout
+        stat_cols = st.columns(4)
+        
+        with stat_cols[0]:
+            st.metric("High Impact", f"{pct_high:.1f}%")
+        
+        with stat_cols[1]:
+            st.metric("Medium Impact", f"{pct_medium:.1f}%")
+        
+        with stat_cols[2]:
+            st.metric("Impact Score", f"{avg_impact_score:.2f}/3")
+        
+        with stat_cols[3]:
+            most_common = max([('High', total_high), ('Medium', total_medium), 
+                             ('Low', total_low), ('Neutral', total_neutral)], 
+                            key=lambda x: x[1])[0]
+            st.metric("Most Common", most_common)
+        
+        # Reshape for percentage chart (focusing on trends)
+        impact_pct_df = pd.melt(
+            impact_df,
+            id_vars=['time_point', 'time_index'],
+            value_vars=['High %', 'Medium %', 'Low %', 'Neutral %'],
+            var_name='Impact Level',
+            value_name='Percentage'
+        )
+        
+        # Create a larger, more prominent trend visualization
+        impact_chart = alt.Chart(impact_pct_df).mark_line(
+            point=True,
+            strokeWidth=3  # Thicker lines for better visibility
+        ).encode(
+            x=alt.X('time_point:N', 
+                   title='Time (External ID)', 
+                   sort=None,
+                   axis=alt.Axis(labelAngle=-45)),  # Angled labels for better readability
+            y=alt.Y('Percentage:Q', 
+                   title='Percentage', 
+                   scale=alt.Scale(domain=[0, 100])),
+            color=alt.Color('Impact Level:N', 
+                          legend=alt.Legend(title="Impact Level"),
+                          scale=alt.Scale(
+                              domain=['High %', 'Medium %', 'Low %', 'Neutral %'],
+                              range=['#e74c3c', '#f39c12', '#3498db', '#95a5a6']
+                          )),
+            tooltip=['time_point:N', 'Impact Level:N', 'Percentage:Q']
+        ).properties(
+            width='container',
+            height=400  # Taller chart for better trend visibility
+        ).interactive()
+        
+        # Display the chart
+        st.altair_chart(impact_chart, use_container_width=True)
+    
+    # 4. Sales Funnel Trends Tab
+    with trend_tabs[3]:
+        #st.subheader("Sales Funnel Stage Trends")
+        
+        # Prepare data with focus on trends
+        stages = ['awareness', 'interest', 'consideration', 'intent', 'evaluation', 'purchase']
+        stage_display = {
+            'awareness': 'Awareness',
+            'interest': 'Interest',
+            'consideration': 'Consideration',
+            'intent': 'Intent',
+            'evaluation': 'Evaluation',
+            'purchase': 'Purchase'
+        }
+        
+        funnel_data = []
+        for i, point in enumerate(formatted_time_points):
+            funnel_counts = trend_data.get('funnel_stage_trends', [])[i]
+            total = funnel_counts.get('total', 1)  # Avoid division by zero
+            
+            data_point = {'time_point': point, 'time_index': i}
+            
+            # Add both counts and percentages
+            for stage in stages:
+                data_point[stage_display[stage]] = funnel_counts.get(stage, 0)
+                data_point[f"{stage_display[stage]} %"] = round(funnel_counts.get(stage, 0) / total * 100, 1) if total > 0 else 0
+            
+            funnel_data.append(data_point)
+        
+        funnel_df = pd.DataFrame(funnel_data)
+        
+        # Calculate summary statistics for funnel stages
+        stage_counts = {}
+        for stage in stages:
+            stage_counts[stage_display[stage]] = funnel_df[stage_display[stage]].sum()
+        
+        total_funnel = sum(stage_counts.values())
+        
+        # Calculate key metrics
+        awareness_count = stage_counts['Awareness']
+        purchase_count = stage_counts['Purchase']
+        
+        conversion_rate = (purchase_count / awareness_count * 100) if awareness_count > 0 else 0
+        
+        if total_funnel > 0:
+            # Find top funnel stage
+            top_stage = max(stage_counts.items(), key=lambda x: x[1])[0]
+        else:
+            top_stage = "N/A"
+        
+        # Display funnel summary statistics
+        st.markdown("#### Summary Statistics")
+        
+        # Use columns for a clean layout
+        stat_cols = st.columns(4)
+        
+        with stat_cols[0]:
+            st.metric("Top Stage", top_stage)
+        
+        with stat_cols[1]:
+            st.metric("Conversion Rate", f"{conversion_rate:.1f}%")
+        
+        with stat_cols[2]:
+            st.metric("Purchase Count", purchase_count)
+        
+        with stat_cols[3]:
+            st.metric("Awareness Count", awareness_count)
+        
+        # Reshape for percentage chart (focusing on trends)
+        funnel_pct_df = pd.melt(
+            funnel_df,
+            id_vars=['time_point', 'time_index'],
+            value_vars=[f"{stage_display[s]} %" for s in stages],
+            var_name='Funnel Stage',
+            value_name='Percentage'
+        )
+        
+        # Create a larger, more prominent trend visualization
+        funnel_chart = alt.Chart(funnel_pct_df).mark_line(
+            point=True,
+            strokeWidth=3  # Thicker lines for better visibility
+        ).encode(
+            x=alt.X('time_point:N', 
+                   title='Time (External ID)', 
+                   sort=None,
+                   axis=alt.Axis(labelAngle=-45)),  # Angled labels for better readability
+            y=alt.Y('Percentage:Q', 
+                   title='Percentage', 
+                   scale=alt.Scale(domain=[0, 100])),
+            color=alt.Color('Funnel Stage:N', 
+                          legend=alt.Legend(title="Funnel Stage"),
+                          scale=alt.Scale(scheme='tableau10')),
+            tooltip=['time_point:N', 'Funnel Stage:N', 'Percentage:Q']
+        ).properties(
+            width='container',
+            height=400  # Taller chart for better trend visibility
+        ).interactive()
+        
+        # Display the chart
+        st.altair_chart(funnel_chart, use_container_width=True)
 
+        
 def main():
     # Initialize session state
     if 'data' not in st.session_state:
@@ -1446,7 +2293,7 @@ def main():
             'last_refresh_time': time.time(),
             'data_loaded': False,
             'relevance_filter': 'all',  # Default to showing all sentences
-            'product_mentions': None  # Add this line
+            'product_mentions': None
         }
     
     # Verify Redis caching
@@ -1569,7 +2416,8 @@ def main():
         "Intent Distribution",
         "High Impact Sentiment",
         "Business Impact Information",
-        "Product Mentions"  # New tab
+        "Product Mentions",
+        "Time Series Trends" 
     ])
 
     # Use the filtered sentences for all visualizations
@@ -1640,6 +2488,10 @@ def main():
             )
         else:
             st.warning("Product mentions data is not available. Please refresh the data.")
+            
+    # Add the new Time Series Trends tab
+    with tabs[9]:
+        render_trends_tab()
 
     # Display refresh information
     st.sidebar.write(f"Total Refreshes: {st.session_state.data['refresh_count']}")
