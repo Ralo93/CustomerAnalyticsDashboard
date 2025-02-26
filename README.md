@@ -65,7 +65,7 @@ mindmap
 
 
 
-# As a CTO, I focus more on non-functional requirements and product strategy.
+# As a CTO, I also focus heavily on non-functional requirements and product strategy.
 
 1. Maintainability
 2. Scalability
