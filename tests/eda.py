@@ -271,8 +271,8 @@ def main():
     print("Plotting word count distribution...")
     plot_word_count_distribution(df)
     
-    print("Plotting time series of sentence creation...")
-    plot_time_series_sentences(df)
+    #print("Plotting time series of sentence creation...")
+    #plot_time_series_sentences(df)
     
     print("Plotting business impact distribution...")
     plot_business_impact_distribution(df)

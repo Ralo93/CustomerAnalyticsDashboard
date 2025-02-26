@@ -1,0 +1,163 @@
+BEGIN:VCALENDAR
+PRODID:https://www.bahn.de
+VERSION:2.0
+CALSCALE:GREGORIAN
+X-LOTUS-CHARSET:UTF-8
+METHOD:PUBLISH
+BEGIN:VTIMEZONE
+TZID:Europe/Berlin
+LAST-MODIFIED:20240422T053450Z
+TZURL:https://www.tzurl.org/zoneinfo/Europe/Berlin
+X-LIC-LOCATION:Europe/Berlin
+X-PROLEPTIC-TZNAME:LMT
+BEGIN:STANDARD
+TZNAME:CET
+TZOFFSETFROM:+005328
+TZOFFSETTO:+0100
+DTSTART:18930401T000000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZNAME:CEST
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+DTSTART:19160430T230000
+RDATE:19400401T020000
+RDATE:19430329T020000
+RDATE:19460414T020000
+RDATE:19470406T030000
+RDATE:19480418T020000
+RDATE:19490410T020000
+RDATE:19800406T020000
+END:DAYLIGHT
+BEGIN:STANDARD
+TZNAME:CET
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+DTSTART:19161001T010000
+RDATE:19421102T030000
+RDATE:19431004T030000
+RDATE:19441002T030000
+RDATE:19451118T030000
+RDATE:19461007T030000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZNAME:CEST
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+DTSTART:19170416T020000
+RRULE:FREQ=YEARLY;UNTIL=19180415T010000Z;BYMONTH=4;BYDAY=3MO
+END:DAYLIGHT
+BEGIN:STANDARD
+TZNAME:CET
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+DTSTART:19170917T030000
+RRULE:FREQ=YEARLY;UNTIL=19180916T010000Z;BYMONTH=9;BYDAY=3MO
+END:STANDARD
+BEGIN:DAYLIGHT
+TZNAME:CEST
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+DTSTART:19440403T020000
+RRULE:FREQ=YEARLY;UNTIL=19450402T010000Z;BYMONTH=4;BYDAY=1MO
+END:DAYLIGHT
+BEGIN:DAYLIGHT
+TZNAME:CEMT
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0300
+DTSTART:19450524T020000
+RDATE:19470511T030000
+END:DAYLIGHT
+BEGIN:DAYLIGHT
+TZNAME:CEST
+TZOFFSETFROM:+0300
+TZOFFSETTO:+0200
+DTSTART:19450924T030000
+RDATE:19470629T030000
+END:DAYLIGHT
+BEGIN:STANDARD
+TZNAME:CET
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0100
+DTSTART:19460101T000000
+RDATE:19800101T000000
+END:STANDARD
+BEGIN:STANDARD
+TZNAME:CET
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+DTSTART:19471005T030000
+RRULE:FREQ=YEARLY;UNTIL=19491002T010000Z;BYMONTH=10;BYDAY=1SU
+END:STANDARD
+BEGIN:STANDARD
+TZNAME:CET
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+DTSTART:19800928T030000
+RRULE:FREQ=YEARLY;UNTIL=19950924T010000Z;BYMONTH=9;BYDAY=-1SU
+END:STANDARD
+BEGIN:DAYLIGHT
+TZNAME:CEST
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+DTSTART:19810329T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZNAME:CET
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+DTSTART:19961027T030000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:8eeee072-390b-4bfb-a9ca-08f2136b473e@bahn.de
+SUMMARY:Regensburg Hbf ➞ Kassel-Wilhelmshöhe
+CLASS:PUBLIC
+LOCATION:Regensburg Hbf
+DESCRIPTION:Regensburg Hbf ➞ Kassel-Wilhelmshöhe\nDatum: 28.12.2024\nKlas
+ se: 2. Klasse\n\nRegensburg Hbf ➞ Würzburg Hbf\nICE 1020 (8000309)\n● ab
+  06:22 Regensburg Hbf ▷ Gleis 5\n○ an 08:22 Würzburg Hbf ▷ Gleis 6\n\nWü
+ rzburg Hbf ➞ Kassel-Wilhelmshöhe\nICE 886 (8000260)\n● ab 08:27 Würzburg
+  Hbf ▷ Gleis 7\n○ an 09:34 Kassel-Wilhelmshöhe ▷ Gleis 3\n\nDauer: 3h 12
+ min\n————\nReisen Sie entspannt und ohne Ticketkontrolle. Nutzen Sie den
+  Komfort Check-in sobald Sie Ihren Sitzplatz erreicht haben. Einfach und
+  schnell unter <a href="https://www.bahn.de/buchung/jetzt-einchecken?dbk
+ anal_009=KCI-Kalenderexport&token=AQICAHhF7aiZD7OtZTiHPG7A72aYDTOgOdYT-g
+ t2VEG8NsJYYgGPtrLAlA7C_sExZzZCYeNvAAAA5TCB4gYJKoZIhvcNAQcGoIHUMIHRAgEAMI
+ HLBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDCfMboXrztb1451qIgIBEICBnaVGkFaiph
+ xlxfj0_4PFyWesPvLoIJikuF18BcBUd9jD35vUkSxvXatO3_wn93j3mpkZURX9UOtf6E9r56
+ U5WOFDKFvxhTjtWkQtPk2RlHaqq_UF0DIL3JG-sgpRDEvKsQhc5di24QTHr8wh3g92zIbvET
+ oibdgQBt8xFvvRhNMLDkfc3T2sSW8zHOyNhLHdiCfAfjrtQoWjc2vESNQ=&lang=de" titl
+ e="Jetzt Einchecken">https://www.bahn.de/buchung/jetzt-einchecken</a>\n—
+ ———\nAlle Angaben ohne Gewähr. Fahrplanänderungen vorbehalten. Bitte prü
+ fen Sie kurz vor der Reise den aktuellen Fahrplan unter: www.bahn.de
+DTSTART:20241228T062200
+DTEND:20241228T093400
+DTSTAMP:20241123T141711Z
+X-ALT-DESC;FMTTYPE=text/html:<html xmlns:v="urn:schemas-microsoft-com:vml
+ " xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas
+ -microsoft-com:office:word" xmlns:m="http://schemas.microsoft.com/office
+ /2004/ 12/omml" xmlns="http://www.w3.org/TR/REC-html40"><head></head><bo
+ dy lang=DE><div class=WordSection1><p class=MsoNormal>Regensburg Hbf ➞ K
+ assel-Wilhelmshöhe<br>Datum: 28.12.2024<br>Klasse: 2. Klasse<br><br>Rege
+ nsburg Hbf ➞ Würzburg Hbf<br>ICE 1020 (8000309)<br>● ab 06:22 Regensburg
+  Hbf ▷ Gleis 5<br>○ an 08:22 Würzburg Hbf ▷ Gleis 6<br><br>Würzburg Hbf 
+ ➞ Kassel-Wilhelmshöhe<br>ICE 886 (8000260)<br>● ab 08:27 Würzburg Hbf ▷ 
+ Gleis 7<br>○ an 09:34 Kassel-Wilhelmshöhe ▷ Gleis 3<br><br>Dauer: 3h 12m
+ in<br>————<br>Reisen Sie entspannt und ohne Ticketkontrolle. Nutzen Sie 
+ den Komfort Check-in sobald Sie Ihren Sitzplatz erreicht haben. Einfach 
+ und schnell unter <a href="https://www.bahn.de/buchung/jetzt-einchecken?
+ dbkanal_009=KCI-Kalenderexport&token=AQICAHhF7aiZD7OtZTiHPG7A72aYDTOgOdY
+ T-gt2VEG8NsJYYgGPtrLAlA7C_sExZzZCYeNvAAAA5TCB4gYJKoZIhvcNAQcGoIHUMIHRAgE
+ AMIHLBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDCfMboXrztb1451qIgIBEICBnaVGkFa
+ iphxlxfj0_4PFyWesPvLoIJikuF18BcBUd9jD35vUkSxvXatO3_wn93j3mpkZURX9UOtf6E9
+ r56U5WOFDKFvxhTjtWkQtPk2RlHaqq_UF0DIL3JG-sgpRDEvKsQhc5di24QTHr8wh3g92zIb
+ vEToibdgQBt8xFvvRhNMLDkfc3T2sSW8zHOyNhLHdiCfAfjrtQoWjc2vESNQ=&lang=de" t
+ itle="Jetzt Einchecken">https://www.bahn.de/buchung/jetzt-einchecken</a>
+ <br>————<br>Alle Angaben ohne Gewähr. Fahrplanänderungen vorbehalten. Bi
+ tte prüfen Sie kurz vor der Reise den aktuellen Fahrplan unter: www.bahn
+ .de</p></div></body></html>
+END:VEVENT
+END:VCALENDAR
