@@ -59,7 +59,7 @@ mindmap
 ### Business Impact 
 ![newplot (1)](https://github.com/user-attachments/assets/b41825f1-48d9-4dd7-9f23-0e283b2e5e2a)
 
-# As a CTO I require a focus more on non-functional requirements and product strategy.
+# As a CTO, I focus more on non-functional requirements and product strategy.
 
 1. Maintainability
 2. Scalability
