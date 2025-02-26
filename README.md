@@ -4,7 +4,43 @@
 ## Overview
 This document describes the architecture of my data processing and visualization system. The system consists of multiple components that work together to process, store, and visualize data from the sales environment.
 
+## Classification Targets
 
+```mermaid
+mindmap
+  root((AI Classification))
+    Sales Funnel Relevance
+      Awareness
+      Interest
+      Retention
+      	Consideration
+      	Evaluation
+      Intent
+      Purchase
+      
+
+    Communication Intent
+      Complaint
+      Feedback
+      General
+      Information
+      Purchase
+      Support
+
+
+    Sentiment
+      Positive
+      Neutral
+      Negative
+
+
+    Business Impact
+      High 
+      Low 
+      Critical
+      Medium
+      Neutral
+```
 
 ## Architecture Diagram
 
@@ -44,41 +80,7 @@ flowchart TD
 
 ```
 
-```mermaid
-mindmap
-  root((AI Classification))
-    Sales Funnel Relevance
-      Awareness
-      Interest
-      Retention
-      	Consideration
-      	Evaluation
-      Intent
-      Purchase
-      
 
-    Communication Intent
-      Complaint
-      Feedback
-      General
-      Information
-      Purchase
-      Support
-
-
-    Sentiment
-      Positive
-      Neutral
-      Negative
-
-
-    Business Impact
-      High 
-      Low 
-      Critical
-      Medium
-      Neutral
-```
 
 ### API Gateway
 
