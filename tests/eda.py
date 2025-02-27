@@ -112,8 +112,10 @@ def load_data():
                 "external_id": sentence.external_id,
                 "text": sentence.text,
                 "created_at": sentence.created_at,
-                "is_sales_funnel_relevant": label.is_sales_funnel_relevant if label else None,
+                 "is_sales_funnel_relevant": label.is_sales_funnel_relevant if label else None,
+                "is_sales_funnel_relevant_confidence": label.is_sales_funnel_relevant_confidence if label else None,
                 "sales_funnel_stage": label.sales_funnel_stage if label else None,
+                "sales_funnel_confidence": label.sales_funnel_confidence if label else None,
                 "sentiment": label.sentiment if label else None,
                 "sentiment_confidence": label.sentiment_confidence if label else None,
                 "business_impact": label.business_impact if label else None,
@@ -427,6 +429,226 @@ def plot_intent_distribution(df):
     return fig
 
 
+def plot_sales_funnel_confidence_scores(df):
+    """Box plot: Distribution of sales funnel related confidence scores."""
+    # Define sales funnel confidence columns
+    funnel_confidence_cols = [
+        'sales_funnel_confidence',
+        'is_sales_funnel_relevant_confidence'
+    ]
+    
+    # Only use columns that exist in the dataframe
+    confidence_cols = [col for col in funnel_confidence_cols if col in df.columns]
+    
+    if not confidence_cols:
+        print("No sales funnel confidence score columns found in the dataframe.")
+        return None
+    
+    # Create a copy of the dataframe with only the available confidence columns
+    df_conf = df[confidence_cols].copy()
+    
+    # Handle the special case for sales_funnel_confidence
+    # Only use sales_funnel_confidence where is_sales_funnel_relevant is True
+    if 'sales_funnel_confidence' in df_conf.columns and 'is_sales_funnel_relevant' in df.columns:
+        mask = df['is_sales_funnel_relevant'] != True
+        df_conf.loc[mask, 'sales_funnel_confidence'] = None
+    
+    # Melt the dataframe to get confidence scores in long format
+    melted_df = pd.melt(
+        df_conf, 
+        value_vars=confidence_cols,
+        var_name='Confidence Type', 
+        value_name='Confidence Score'
+    )
+    
+    # Drop rows with null confidence scores
+    melted_df = melted_df.dropna(subset=['Confidence Score'])
+    
+    if len(melted_df) == 0:
+        print("No non-null sales funnel confidence scores found in the dataframe.")
+        return None
+    
+    # Clean up the labels for display
+    melted_df['Confidence Type'] = melted_df['Confidence Type'].apply(
+        lambda x: 'Funnel Stage' if x == 'sales_funnel_confidence' else 'Funnel Relevance'
+    )
+    
+    # Create the box plot with improved visual style
+    fig = px.box(
+        melted_df,
+        x='Confidence Type',
+        y='Confidence Score',
+        title='Sales Funnel Confidence Scores',
+        points='all',  # Show all points
+        color='Confidence Type',
+        notched=True,  # Add notches to better show confidence interval of median
+        boxmode='overlay'  # Overlay boxes for better comparison
+    )
+    
+    fig.update_layout(
+        title=dict(
+            text='Sales Funnel Confidence Scores',
+            font=dict(size=24)
+        ),
+        xaxis=dict(
+            title='Prediction Type',
+            title_font=dict(size=18),
+            tickfont=dict(size=16),
+            showgrid=False
+        ),
+        yaxis=dict(
+            title='Confidence Score',
+            title_font=dict(size=18),
+            tickfont=dict(size=16),
+            range=[0, 1],
+            showgrid=True,
+            gridcolor='rgba(220,220,220,0.5)'  # Lighter grid for better readability
+        ),
+        height=600,
+        width=900,
+        boxgap=0.3,  # More space between boxes
+        plot_bgcolor='white'  # White background for better contrast
+    )
+    
+    # Add horizontal reference lines at key confidence thresholds
+    fig.add_shape(
+        type="line", line=dict(dash="dash", width=1, color="rgba(0,0,0,0.3)"),
+        y0=0.7, y1=0.7, x0=-0.5, x1=len(confidence_cols)-0.5,
+        layer="below"
+    )
+    
+    fig.add_annotation(
+        x=0, y=0.73, 
+        text="High confidence (>0.7)",
+        showarrow=False,
+        font=dict(size=12)
+    )
+    
+    # Add a note about data completeness
+    for i, col in enumerate(confidence_cols):
+        display_name = 'Funnel Stage' if col == 'sales_funnel_confidence' else 'Funnel Relevance'
+        non_null = df_conf[col].count()
+        total = len(df_conf)
+        pct = (non_null / total) * 100
+        
+        fig.add_annotation(
+            x=display_name,
+            y=0.05,
+            text=f"Data available: {non_null}/{total} ({pct:.1f}%)",
+            showarrow=False,
+            font=dict(size=12)
+        )
+    
+    save_fig(fig, "sales_funnel_confidence_scores")
+    return fig
+
+def plot_other_confidence_scores(df):
+    """Box plot: Distribution of sentiment, intent, and business impact confidence scores."""
+    # Define non-sales funnel confidence columns
+    other_confidence_cols = [
+        'sentiment_confidence', 
+        'business_impact_confidence', 
+        'intent_confidence'
+    ]
+    
+    # Only use columns that exist in the dataframe
+    confidence_cols = [col for col in other_confidence_cols if col in df.columns]
+    
+    if not confidence_cols:
+        print("No sentiment, intent, or business impact confidence score columns found in the dataframe.")
+        return None
+    
+    # Create a copy of the dataframe with only the available confidence columns
+    df_conf = df[confidence_cols].copy()
+    
+    # Melt the dataframe to get confidence scores in long format
+    melted_df = pd.melt(
+        df_conf, 
+        value_vars=confidence_cols,
+        var_name='Confidence Type', 
+        value_name='Confidence Score'
+    )
+    
+    # Drop rows with null confidence scores
+    melted_df = melted_df.dropna(subset=['Confidence Score'])
+    
+    if len(melted_df) == 0:
+        print("No non-null sentiment, intent, or business impact confidence scores found in the dataframe.")
+        return None
+    
+    # Clean up the labels for display
+    melted_df['Confidence Type'] = melted_df['Confidence Type'].apply(
+        lambda x: x.replace('_confidence', '').replace('_', ' ').title()
+    )
+    
+    # Create the box plot with improved visual style
+    fig = px.box(
+        melted_df,
+        x='Confidence Type',
+        y='Confidence Score',
+        title='Sentiment, Intent, and Business Impact Confidence Scores',
+        points='all',  # Show all points
+        color='Confidence Type',
+        notched=True,  # Add notches to better show confidence interval of median
+        boxmode='overlay'  # Overlay boxes for better comparison
+    )
+    
+    fig.update_layout(
+        title=dict(
+            text='Sentiment, Intent, and Business Impact Confidence Scores',
+            font=dict(size=24)
+        ),
+        xaxis=dict(
+            title='Prediction Type',
+            title_font=dict(size=18),
+            tickfont=dict(size=16),
+            showgrid=False
+        ),
+        yaxis=dict(
+            title='Confidence Score',
+            title_font=dict(size=18),
+            tickfont=dict(size=16),
+            range=[0, 1],
+            showgrid=True,
+            gridcolor='rgba(220,220,220,0.5)'  # Lighter grid for better readability
+        ),
+        height=600,
+        width=900,
+        boxgap=0.3,  # More space between boxes
+        plot_bgcolor='white'  # White background for better contrast
+    )
+    
+    # Add horizontal reference lines at key confidence thresholds
+    fig.add_shape(
+        type="line", line=dict(dash="dash", width=1, color="rgba(0,0,0,0.3)"),
+        y0=0.7, y1=0.7, x0=-0.5, x1=len(confidence_cols)-0.5,
+        layer="below"
+    )
+    
+    fig.add_annotation(
+        x=1, y=0.73, 
+        text="High confidence (>0.7)",
+        showarrow=False,
+        font=dict(size=12)
+    )
+    
+    # Add a note about data completeness
+    for i, col in enumerate(confidence_cols):
+        display_name = col.replace('_confidence', '').replace('_', ' ').title()
+        non_null = df_conf[col].count()
+        total = len(df_conf)
+        pct = (non_null / total) * 100
+        
+        fig.add_annotation(
+            x=display_name,
+            y=0.05,
+            text=f"Data available: {non_null}/{total} ({pct:.1f}%)",
+            showarrow=False,
+            font=dict(size=12)
+        )
+    
+    save_fig(fig, "other_confidence_scores")
+    return fig
 
 # -------------------------
 # Main EDA Routine
@@ -442,15 +664,23 @@ def main():
     
     # Create directory for figures if it doesn't exist
     os.makedirs("figures", exist_ok=True)
-    
+
     # Create and save visualizations
-    print("Plotting sales funnel classification...")
-    fig_funnel = plot_sales_funnel_classification(df)
+    print("Plotting confidence score distribution...")
+    #fig_funnel = plot_other_confidence_scores(df)
+    #fig_funnel.show()
+
+    fig_funnel = plot_sales_funnel_confidence_scores(df)
     fig_funnel.show()
     
-    print("Plotting sentiment distribution by sales funnel stage...")
-    fig1 = plot_sentiment_by_funnel(df)
-    fig1.show()
+    # Create and save visualizations
+    #print("Plotting sales funnel classification...")
+    #fig_funnel = plot_sales_funnel_classification(df)
+    #fig_funnel.show()
+    
+    #print("Plotting sentiment distribution by sales funnel stage...")
+    #fig1 = plot_sentiment_by_funnel(df)
+    #fig1.show()
     
     print("Plotting product mentions...")
     #fig2 = plot_product_mentions(df)

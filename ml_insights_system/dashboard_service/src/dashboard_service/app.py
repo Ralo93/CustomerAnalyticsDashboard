@@ -968,19 +968,26 @@ def render_high_impact_sentiment(df, all_sentences):
         if impact_filter == "High Only":
             impact_params = {"business_impact": "High"}
             impact_title = "High"
+            impact_values = ["High"]
         elif impact_filter == "Critical Only":
             impact_params = {"business_impact": "Critical"}
             impact_title = "Critical"
+            impact_values = ["Critical"]
         else:  # "High & Critical"
             impact_params = {"business_impact": ["High", "Critical"]}
             impact_title = "High & Critical"
+            impact_values = ["High", "Critical"]
         
-        # Fetch the filtered high impact data
-        high_impact_data = fetch_data(
+        # Fetch the data - this might return all impact levels regardless of params
+        all_impact_data = fetch_data(
             "sentiment-impact", 
-            f"ml_insights:high_impact_{impact_filter.lower().replace(' ', '_')}",
+            f"ml_insights:high_impact_{impact_filter.lower().replace(' & ', '_')}",
             params=impact_params
         )
+        
+        # Explicitly filter the data to ensure only selected impact levels are included
+        # This is the critical fix - filter the data after fetching to ensure correct filtering
+        high_impact_data = all_impact_data[all_impact_data['business_impact'].isin(impact_values)]
     
     if high_impact_data.empty:
         st.warning(f"No {impact_title} business impact data available")
@@ -1093,47 +1100,22 @@ def render_high_impact_sentiment(df, all_sentences):
             key="high_impact_sentiment_filter"
         )
     
-    # Use client-side filtering
+    # Filter sentences for display
+    # First filter all_sentences to include only the selected business impact levels
+    pre_filtered_sentences = [s for s in all_sentences if s.get('business_impact') in impact_values]
+    
+    # Apply additional filters for stage and sentiment
     filters = {}
-    
-    # Apply impact filter
-    if impact_filter == "High Only":
-        filters['business_impact'] = "High"
-    elif impact_filter == "Critical Only":
-        filters['business_impact'] = "Critical"
-    else:
-        # For "High & Critical", we need to handle this specially since our filter function
-        # doesn't support OR conditions directly
-        # We'll retrieve both sets and combine them
-        high_filters = filters.copy()
-        high_filters['business_impact'] = "High"
-        critical_filters = filters.copy()
-        critical_filters['business_impact'] = "Critical"
-        
-        high_sentences = filter_sentences(all_sentences, high_filters)
-        critical_sentences = filter_sentences(all_sentences, critical_filters)
-        
-        # Combine both sets (avoiding duplicates if any)
-        combined_sentences = high_sentences + [s for s in critical_sentences if s not in high_sentences]
-        
-        # Apply additional filters
-        if selected_stage != "All":
-            combined_sentences = [s for s in combined_sentences if s.get('sales_funnel_stage') == selected_stage]
-        
-        if selected_sentiment != "All":
-            combined_sentences = [s for s in combined_sentences if s.get('sentiment') == selected_sentiment]
-        
-        display_sentence_details(combined_sentences)
-        return
-    
-    # Continue with standard filtering for "High Only" or "Critical Only" cases
     if selected_stage != "All":
         filters['sales_funnel_stage'] = selected_stage
     
     if selected_sentiment != "All":
         filters['sentiment'] = selected_sentiment
     
-    filtered_sentences = filter_sentences(all_sentences, filters)
+    # Apply remaining filters to the pre-filtered sentences
+    filtered_sentences = filter_sentences(pre_filtered_sentences, filters)
+    
+    # Display the filtered sentences
     display_sentence_details(filtered_sentences)
 
     # Additional analysis - Top issues or patterns
@@ -1698,6 +1680,8 @@ def render_product_mentions(df, all_sentences):
     **Note:** This search uses advanced product-specific filtering from the sentence features table, 
     allowing you to find sentences based on the products they mention and quantities.
     """)
+
+
 def render_trends_tab():
     """Render the Time Series Trends tab (tab9) with focus on trend visualization"""
     #st.subheader("Time Series Trends Analysis")
@@ -2080,9 +2064,11 @@ def render_trends_tab():
         # Display the chart
         st.altair_chart(product_chart, use_container_width=True)
     
+        # 3. Business Impact Trends Tab
+        
     # 3. Business Impact Trends Tab
     with trend_tabs[2]:
-        #st.subheader("Business Impact Trends Over Time")
+        st.subheader("Business Impact Trends Over Time")
         
         # Prepare data with focus on trends
         impact_data = []
@@ -2090,35 +2076,45 @@ def render_trends_tab():
             impact_counts = trend_data.get('impact_trends', [])[i]
             total = impact_counts.get('total', 1)  # Avoid division by zero
             
-            # Calculate impact score for this point (weighted average)
-            weights = {'high': 3, 'medium': 2, 'low': 1, 'neutral': 0}
+            # Add critical impact level with higher weight
+            weights = {'critical': 4, 'high': 3, 'medium': 2, 'low': 1, 'neutral': 0}
             impact_score = sum(impact_counts.get(k, 0) * weights[k] for k in weights) / total if total > 0 else 0
+            
+            # Handle missing critical counts - defaults to 0 if not present
+            #critical_count = impact_counts.get('critical', 0)
             
             impact_data.append({
                 'time_point': point,
                 'time_index': i,  # Add index for trend line
+                'Critical': impact_counts.get('critical', 0),
                 'High': impact_counts.get('high', 0),
                 'Medium': impact_counts.get('medium', 0),
                 'Low': impact_counts.get('low', 0),
                 'Neutral': impact_counts.get('neutral', 0),
                 'Impact Score': round(impact_score, 2),
+                'Critical %': round(impact_counts.get('critical', 0) / total * 100, 1) if total > 0 else 0,
                 'High %': round(impact_counts.get('high', 0) / total * 100, 1) if total > 0 else 0,
                 'Medium %': round(impact_counts.get('medium', 0) / total * 100, 1) if total > 0 else 0,
                 'Low %': round(impact_counts.get('low', 0) / total * 100, 1) if total > 0 else 0,
-                'Neutral %': round(impact_counts.get('neutral', 0) / total * 100, 1) if total > 0 else 0
+                'Neutral %': round(impact_counts.get('neutral', 0) / total * 100, 1) if total > 0 else 0,
+                # Add new combined metrics for better trend interpretation
+                'Serious Impact %': round((impact_counts.get('critical', 0) + impact_counts.get('high', 0)) / total * 100, 1) if total > 0 else 0,
             })
         
         impact_df = pd.DataFrame(impact_data)
         
         # Calculate summary statistics for business impact
+        total_critical = impact_df['Critical'].sum()
         total_high = impact_df['High'].sum()
         total_medium = impact_df['Medium'].sum()
         total_low = impact_df['Low'].sum()
         total_neutral = impact_df['Neutral'].sum()
         
-        total_impacts = total_high + total_medium + total_low + total_neutral
+        total_impacts = total_critical + total_high + total_medium + total_low + total_neutral
+        pct_critical = (total_critical / total_impacts * 100) if total_impacts > 0 else 0
         pct_high = (total_high / total_impacts * 100) if total_impacts > 0 else 0
         pct_medium = (total_medium / total_impacts * 100) if total_impacts > 0 else 0
+        pct_serious = ((total_critical + total_high) / total_impacts * 100) if total_impacts > 0 else 0
         
         avg_impact_score = impact_df['Impact Score'].mean()
         
@@ -2126,58 +2122,148 @@ def render_trends_tab():
         st.markdown("#### Summary Statistics")
         
         # Use columns for a clean layout
-        stat_cols = st.columns(4)
+        stat_cols = st.columns(5)
         
         with stat_cols[0]:
-            st.metric("High Impact", f"{pct_high:.1f}%")
+            st.metric("Critical Impact", f"{pct_critical:.1f}%")
         
         with stat_cols[1]:
-            st.metric("Medium Impact", f"{pct_medium:.1f}%")
+            st.metric("High Impact", f"{pct_high:.1f}%")
         
         with stat_cols[2]:
-            st.metric("Impact Score", f"{avg_impact_score:.2f}/3")
+            st.metric("Medium Impact", f"{pct_medium:.1f}%")
         
         with stat_cols[3]:
-            most_common = max([('High', total_high), ('Medium', total_medium), 
-                             ('Low', total_low), ('Neutral', total_neutral)], 
-                            key=lambda x: x[1])[0]
-            st.metric("Most Common", most_common)
+            st.metric("Serious Impact", f"{pct_serious:.1f}%", 
+                    help="Combined percentage of Critical and High impacts")
         
-        # Reshape for percentage chart (focusing on trends)
-        impact_pct_df = pd.melt(
-            impact_df,
-            id_vars=['time_point', 'time_index'],
-            value_vars=['High %', 'Medium %', 'Low %', 'Neutral %'],
-            var_name='Impact Level',
-            value_name='Percentage'
+        with stat_cols[4]:
+            st.metric("Impact Score", f"{avg_impact_score:.2f}/4", 
+                    help="Weighted average (Critical=4, High=3, Medium=2, Low=1, Neutral=0)")
+        
+        # Add impact trend interpretation
+        st.markdown("#### Impact Trend Analysis")
+        
+        # Calculate trend direction
+        if len(impact_df) >= 2:
+            first_serious = impact_df.iloc[0]['Serious Impact %']
+            last_serious = impact_df.iloc[-1]['Serious Impact %']
+            trend_diff = last_serious - first_serious
+            trend_direction = "increasing" if trend_diff > 5 else "decreasing" if trend_diff < -5 else "stable"
+            
+            # Provide trend insight
+            if trend_direction == "increasing":
+                st.warning(f"⚠️ Serious impact issues (Critical + High) have increased by {abs(trend_diff):.1f}% over the time period.")
+            elif trend_direction == "decreasing":
+                st.success(f"✅ Serious impact issues (Critical + High) have decreased by {abs(trend_diff):.1f}% over the time period.")
+            else:
+                st.info(f"ℹ️ Serious impact issues (Critical + High) have remained relatively stable (change of {trend_diff:.1f}%).")
+        
+        # Create tabs for different visualization options
+        viz_tabs = st.tabs(["Combined View", "Detailed Percentages", "Impact Score"])
+        
+        with viz_tabs[0]:
+            # Combined view with emphasis on Serious Impact (Critical + High)
+            # Use area chart to better show the composition
+            impact_combined_df = pd.melt(
+                impact_df,
+                id_vars=['time_point', 'time_index'],
+                value_vars=['Serious Impact %', 'Medium %', 'Low %', 'Neutral %'],
+                var_name='Impact Group',
+                value_name='Percentage'
+            )
+            
+            combined_chart = alt.Chart(impact_combined_df).mark_area().encode(
+                x=alt.X('time_point:N', 
+                    title='Time Period', 
+                    sort=None,
+                    axis=alt.Axis(labelAngle=-45)),
+                y=alt.Y('Percentage:Q', 
+                    title='Percentage', 
+                    scale=alt.Scale(domain=[0, 100])),
+                color=alt.Color('Impact Group:N', 
+                            legend=alt.Legend(title="Impact Group"),
+                            scale=alt.Scale(
+                                domain=['Serious Impact %', 'Medium %', 'Low %', 'Neutral %'],
+                                range=['#c0392b', '#f39c12', '#3498db', '#95a5a6']
+                            )),
+                tooltip=['time_point:N', 'Impact Group:N', 'Percentage:Q']
+            ).properties(
+                width='container',
+                height=400
+            ).interactive()
+            
+            st.altair_chart(combined_chart, use_container_width=True)
+            
+            st.info("This view shows the trend of Serious Impact (Critical + High combined) compared to other impact levels.")
+        
+        with viz_tabs[1]:
+            # Detailed percentages view showing all impact levels
+            impact_pct_df = pd.melt(
+                impact_df,
+                id_vars=['time_point', 'time_index'],
+                value_vars=['Critical %', 'High %', 'Medium %', 'Low %', 'Neutral %'],
+                var_name='Impact Level',
+                value_name='Percentage'
+            )
+            
+            detailed_chart = alt.Chart(impact_pct_df).mark_line(
+                point=True,
+                strokeWidth=3
+            ).encode(
+                x=alt.X('time_point:N', 
+                    title='Time Period', 
+                    sort=None,
+                    axis=alt.Axis(labelAngle=-45)),
+                y=alt.Y('Percentage:Q', 
+                    title='Percentage', 
+                    scale=alt.Scale(domain=[0, 100])),
+                color=alt.Color('Impact Level:N', 
+                            legend=alt.Legend(title="Impact Level"),
+                            scale=alt.Scale(
+                                domain=['Critical %', 'High %', 'Medium %', 'Low %', 'Neutral %'],
+                                range=['#8e44ad', '#e74c3c', '#f39c12', '#3498db', '#95a5a6']
+                            )),
+                tooltip=['time_point:N', 'Impact Level:N', 'Percentage:Q']
+            ).properties(
+                width='container',
+                height=400
+            ).interactive()
+            
+            st.altair_chart(detailed_chart, use_container_width=True)
+        
+        with viz_tabs[2]:
+            # Impact score over time
+            score_chart = alt.Chart(impact_df).mark_line(
+                point=True,
+                strokeWidth=4,
+                color='#2c3e50'
+            ).encode(
+                x=alt.X('time_point:N', 
+                    title='Time Period', 
+                    sort=None,
+                    axis=alt.Axis(labelAngle=-45)),
+                y=alt.Y('Impact Score:Q', 
+                    title='Impact Score (0-4)', 
+                    scale=alt.Scale(domain=[0, 4])),
+                tooltip=['time_point:N', 'Impact Score:Q']
+            ).properties(
+                width='container',
+                height=400
+            ).interactive()
+            
+            st.altair_chart(score_chart, use_container_width=True)
+            
+            st.info("The Impact Score is a weighted average: Critical=4, High=3, Medium=2, Low=1, Neutral=0. Higher values indicate more severe impact.")
+        
+        # Add download capability for the data
+        st.download_button(
+            "Download Impact Trend Data",
+            impact_df.to_csv(index=False).encode('utf-8'),
+            "impact_trend_data.csv",
+            "text/csv",
+            key='download-impact-csv'
         )
-        
-        # Create a larger, more prominent trend visualization
-        impact_chart = alt.Chart(impact_pct_df).mark_line(
-            point=True,
-            strokeWidth=3  # Thicker lines for better visibility
-        ).encode(
-            x=alt.X('time_point:N', 
-                   title='Time (External ID)', 
-                   sort=None,
-                   axis=alt.Axis(labelAngle=-45)),  # Angled labels for better readability
-            y=alt.Y('Percentage:Q', 
-                   title='Percentage', 
-                   scale=alt.Scale(domain=[0, 100])),
-            color=alt.Color('Impact Level:N', 
-                          legend=alt.Legend(title="Impact Level"),
-                          scale=alt.Scale(
-                              domain=['High %', 'Medium %', 'Low %', 'Neutral %'],
-                              range=['#e74c3c', '#f39c12', '#3498db', '#95a5a6']
-                          )),
-            tooltip=['time_point:N', 'Impact Level:N', 'Percentage:Q']
-        ).properties(
-            width='container',
-            height=400  # Taller chart for better trend visibility
-        ).interactive()
-        
-        # Display the chart
-        st.altair_chart(impact_chart, use_container_width=True)
     
     # 4. Sales Funnel Trends Tab
     with trend_tabs[3]:

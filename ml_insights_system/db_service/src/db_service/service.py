@@ -19,7 +19,6 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Database Service")
@@ -467,7 +466,7 @@ async def get_sentiment_distribution(db: Session = Depends(get_db)):
 @app.get("/analytics/impact-scores", response_model=List[ImpactScore])
 async def get_impact_scores(db: Session = Depends(get_db)):
     """Get average impact scores per sales funnel stage for relevant sentences only"""
-    impact_mapping = {'Low': 1, 'Medium': 2, 'High': 3, 'Neutral': 1.5}
+    impact_mapping = {'Low': 1, 'Medium': 2, 'High': 3, 'Neutral': 1.5, 'Critical': 4}
     
     # Create a list of tuples for the case statement
     whens = [(models.SentenceLabel.business_impact == k, v) for k, v in impact_mapping.items()]
@@ -527,7 +526,7 @@ async def get_high_impact_positive_sentiment(db: Session = Depends(get_db)):
         func.count(
             case(
                 (and_(
-                    models.SentenceLabel.business_impact == 'High',
+                    models.SentenceLabel.business_impact.in_(['High', 'Critical']),
                     models.SentenceLabel.sentiment == 'Positive'
                 ), 1)
             )
@@ -1158,6 +1157,7 @@ async def get_time_series_trends(
         
         # Calculate business impact data for this point
         impact_trends.append({
+            'critical': 1 if result.business_impact == 'Critical' else 0,
             'high': 1 if result.business_impact == 'High' else 0,
             'medium': 1 if result.business_impact == 'Medium' else 0,
             'low': 1 if result.business_impact == 'Low' else 0,
@@ -1233,6 +1233,82 @@ async def health_check():
         "service": "database_service",
         "version": "1.0.0",
         "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/analytics/confidence-scores")
+async def get_confidence_scores(
+    is_sales_funnel_relevant: Optional[bool] = None,
+    db: Session = Depends(get_db)
+):
+    """Get distribution of confidence scores for different label dimensions"""
+    # First get the relevant data from the database
+    query = db.query(
+        models.SentenceLabel.id,
+        models.SentenceLabel.sentiment_confidence,
+        models.SentenceLabel.business_impact_confidence,
+        models.SentenceLabel.intent_confidence,
+        models.SentenceLabel.sales_funnel_confidence,
+        models.SentenceLabel.is_sales_funnel_relevant,
+        models.SentenceLabel.is_sales_funnel_relevant_confidence
+    )
+    
+    # Apply relevance filter if provided
+    if is_sales_funnel_relevant is not None:
+        query = query.filter(models.SentenceLabel.is_sales_funnel_relevant == is_sales_funnel_relevant)
+    
+    results = query.all()
+    
+    # Prepare the confidence data, handling special cases
+    confidence_data = {
+        "sentiment_confidence": [r.sentiment_confidence for r in results if r.sentiment_confidence is not None],
+        "business_impact_confidence": [r.business_impact_confidence for r in results if r.business_impact_confidence is not None],
+        "intent_confidence": [r.intent_confidence for r in results if r.intent_confidence is not None],
+        # Only include sales_funnel_confidence for entries that are sales funnel relevant
+        "sales_funnel_confidence": [r.sales_funnel_confidence for r in results 
+                                   if r.sales_funnel_confidence is not None and r.is_sales_funnel_relevant is True],
+        "is_sales_funnel_relevant_confidence": [r.is_sales_funnel_relevant_confidence for r in results 
+                                              if r.is_sales_funnel_relevant_confidence is not None]
+    }
+    
+    # Add metadata about data availability
+    metadata = {
+        "total_records": len(results),
+        "available_records": {
+            "sentiment_confidence": sum(1 for r in results if r.sentiment_confidence is not None),
+            "business_impact_confidence": sum(1 for r in results if r.business_impact_confidence is not None),
+            "intent_confidence": sum(1 for r in results if r.intent_confidence is not None),
+            "sales_funnel_confidence": sum(1 for r in results 
+                                         if r.sales_funnel_confidence is not None and r.is_sales_funnel_relevant is True),
+            "is_sales_funnel_relevant_confidence": sum(1 for r in results 
+                                                    if r.is_sales_funnel_relevant_confidence is not None)
+        }
+    }
+    
+    # Calculate stats for each confidence type
+    stats = {}
+    for conf_type, values in confidence_data.items():
+        if values:
+            stats[conf_type] = {
+                "count": len(values),
+                "min": min(values),
+                "max": max(values),
+                "mean": sum(values) / len(values),
+                "median": sorted(values)[len(values) // 2],
+                "distribution": [
+                    {"range": "0.0-0.2", "count": sum(1 for v in values if 0.0 <= v < 0.2)},
+                    {"range": "0.2-0.4", "count": sum(1 for v in values if 0.2 <= v < 0.4)},
+                    {"range": "0.4-0.6", "count": sum(1 for v in values if 0.4 <= v < 0.6)},
+                    {"range": "0.6-0.8", "count": sum(1 for v in values if 0.6 <= v < 0.8)},
+                    {"range": "0.8-1.0", "count": sum(1 for v in values if 0.8 <= v <= 1.0)}
+                ]
+            }
+        else:
+            stats[conf_type] = {"count": 0}
+    
+    return {
+        "metadata": metadata,
+        "stats": stats
     }
 
 if __name__ == "__main__":
