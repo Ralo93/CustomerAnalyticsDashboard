@@ -49,14 +49,11 @@ mindmap
 
 ![sentimentperstage](https://github.com/user-attachments/assets/da4b55c4-ac43-4f62-be2a-2fc87a5373ab)
 
-
-![bi](https://github.com/user-attachments/assets/81c8c2e8-3ef4-40fc-8951-471ad7d0d62e)
-
+![newplot (1)](https://github.com/user-attachments/assets/08a49cdf-a829-483b-a760-f48d6e20567c)
 
 ## Features Sneak Preview
 
-![pm](https://github.com/user-attachments/assets/3ad617e6-000e-4a5c-b4cd-fd030c0423fa)
-
+![newplot](https://github.com/user-attachments/assets/32846c12-1ff2-40d9-8429-bf45467a68a9)
 
 ![wordcount](https://github.com/user-attachments/assets/9c2e91aa-88a9-4acc-80bf-220aafda3367)
 
