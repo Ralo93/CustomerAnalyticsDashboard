@@ -55,6 +55,12 @@ mindmap
 ![wordcount](https://github.com/user-attachments/assets/9c2e91aa-88a9-4acc-80bf-220aafda3367)
 
 
+## Classification Results
+
+![newplot (7)](https://github.com/user-attachments/assets/f880d25e-8601-4c19-ae13-691c25fced54)
+
+![newplot (6)](https://github.com/user-attachments/assets/e25ace11-97fe-43cf-b743-dde4322cf801)
+
 
 ## Data Model
 
@@ -148,7 +154,7 @@ flowchart TD
     
     MQ -->|Dequeue Task| Worker[Worker]
     
-    Worker -->|OpenAI API Call| OpenAI[OpenAI Service or Internal Model] 
+    Worker -->|API Call| OpenAI[OpenAI Service or Internal Model] 
     OpenAI -->|Response| Worker
     
     Worker -->|Send Results| DBS
