@@ -1,11 +1,11 @@
 # How to create a customer conversation analytics product as a CTO
 
 ## Overview
-This document describes the architecture of my data processing and visualization system. The system consists of multiple components that work together to process, store, and visualize data from the sales environment.
+This document describes the approach and architecture of my data processing and visualization analytics system. The system consists of multiple components that work together to process, store, and visualize data from customer conversations in a sales environment.
 
 ## Classification Targets
 
-To make sense of the provided sentences, I extracted features and provided labels in the form of classifications. Lets start with the classifications.
+To make sense of the provided conversations, I extracted features and provided labels in the form of classifications. Lets start with the classifications.
 I simply used OpenAIs 3.5-turbo model as a baseline. Classification of each sentence was done using four major dimensions:
 
 ```mermaid
