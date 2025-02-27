@@ -223,7 +223,19 @@ flowchart TD
 - Retrieves data from Redis cache for optimal performance
 - Offers interactive data exploration capabilities
 
-### Data Flow
+## Tech Stack
+
+- Python 3.12
+- Nginx
+- Poetry
+- Streamlit
+- PostgreSQL
+- RabbitMQ
+- RESTfulAPI
+- Docker
+
+
+## Data Flow
 
 - User sends a request to the API Gateway
   
@@ -238,17 +250,6 @@ flowchart TD
 7. Redis caches relevant data from the database
 8. Dashboard retrieves data from Redis to display visualizations
 
-
-## TechStack
-
-- Python 3.12
-- Nginx
-- Poetry
-- Streamlit
-- PostgreSQL
-- RabbitMQ
-- RESTfulAPI
-- Docker
 
 
 ## Dashboard Sneak Preview
