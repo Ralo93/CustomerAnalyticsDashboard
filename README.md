@@ -1,4 +1,4 @@
-# How to create a customer conversation analytics product as a CTO
+# How to create a customer conversation analytics product
 
 ## Overview
 This document describes the approach and architecture of my data processing and visualization analytics system. The system consists of multiple components that work together to process, store, and visualize data from customer conversations in a sales environment.
