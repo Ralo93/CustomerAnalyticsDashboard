@@ -899,6 +899,7 @@ def render_intent_distribution(df, all_sentences):
         return
 
     st.subheader("Communication Intent Distribution")
+    st.info("This chart displays data exclusively for sentences unrelated to the sales funnel.")
     
     # Create donut chart
     chart = alt.Chart(df).mark_arc(innerRadius=50).encode(
@@ -1136,39 +1137,39 @@ def render_high_impact_sentiment(df, all_sentences):
     display_sentence_details(filtered_sentences)
 
     # Additional analysis - Top issues or patterns
-    if not high_impact_data.empty:
-        st.subheader(f"Analysis of {impact_title} Business Impact Sentences")
+    #if not high_impact_data.empty:
+    #    st.subheader(f"Analysis of {impact_title} Business Impact Sentences")
         
         # If we have other attributes like 'information_type' or 'intent', show their distribution
-        if 'information_type' in high_impact_data.columns:
+    #    if 'information_type' in high_impact_data.columns:
             # Show information type distribution
-            info_chart = alt.Chart(high_impact_data).mark_bar().encode(
-                x=alt.X('information_type:N', title='Information Type'),
-                y=alt.Y('count:Q', title='Count'),
-                color=alt.Color('information_type:N', scale=alt.Scale(scheme='category10')),
-                tooltip=['information_type', 'count']
-            ).properties(
-                width=600,
-                height=300,
-                title=f"Information Types in {impact_title} Business Impact Sentences"
-            ).interactive()
-            
-            st.altair_chart(info_chart, use_container_width=True)
-        
-        if 'intent' in high_impact_data.columns:
-            # Show intent distribution
-            intent_chart = alt.Chart(high_impact_data).mark_bar().encode(
-                x=alt.X('intent:N', title='Intent'),
-                y=alt.Y('count:Q', title='Count'),
-                color=alt.Color('intent:N', scale=alt.Scale(scheme='category10')),
-                tooltip=['intent', 'count']
-            ).properties(
-                width=600,
-                height=300,
-                title=f"Intent Distribution in {impact_title} Business Impact Sentences"
-            ).interactive()
-            
-            st.altair_chart(intent_chart, use_container_width=True)
+    #        info_chart = alt.Chart(high_impact_data).mark_bar().encode(
+    #            x=alt.X('information_type:N', title='Information Type'),
+    #            y=alt.Y('count:Q', title='Count'),
+    #            color=alt.Color('information_type:N', scale=alt.Scale(scheme='category10')),
+    #            tooltip=['information_type', 'count']
+    #        ).properties(
+    #            width=600,
+    #            height=300,
+    #            title=f"Information Types in {impact_title} Business Impact Sentences"
+    #        ).interactive()
+    #        
+    #        st.altair_chart(info_chart, use_container_width=True)
+    #    
+    #    if 'intent' in high_impact_data.columns:
+    #        # Show intent distribution
+    #        intent_chart = alt.Chart(high_impact_data).mark_bar().encode(
+    #            x=alt.X('intent:N', title='Intent'),
+    #            y=alt.Y('count:Q', title='Count'),
+    #            color=alt.Color('intent:N', scale=alt.Scale(scheme='category10')),
+    #            tooltip=['intent', 'count']
+    #        ).properties(
+    #            width=600,
+    #            height=300,
+    #            title=f"Intent Distribution in {impact_title} Business Impact Sentences"
+    #        ).interactive()
+    #        
+    #        st.altair_chart(intent_chart, use_container_width=True)
 
 def render_stage_intent_alignment(df, all_sentences):
     """Visualize alignment between sales funnel stages and intents"""
@@ -2335,7 +2336,7 @@ def main():
     )
 
     # Main content
-    st.title("Customer Interaction Analytics Dashboard")
+    st.title("Insights")
     #st.write("Interactive analytics with client-side filtering for fast exploration")
     
     # Check if data needs to be loaded/refreshed

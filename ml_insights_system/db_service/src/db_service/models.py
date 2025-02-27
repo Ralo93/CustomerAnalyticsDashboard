@@ -29,7 +29,6 @@ class Sentence(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
-
 class SentenceLabel(Base):
     __tablename__ = "sentence_labels"
     
