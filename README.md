@@ -43,11 +43,9 @@ mindmap
 
 ## Labels Sneak Preview
 
+![newplot (3)](https://github.com/user-attachments/assets/4261b402-ef57-477e-8b4b-09d4773d1657)
 
-![sfs](https://github.com/user-attachments/assets/aa0e7250-79e2-40fd-bafa-f8ece7dd3ace)
-
-
-![sentimentperstage](https://github.com/user-attachments/assets/da4b55c4-ac43-4f62-be2a-2fc87a5373ab)
+![newplot (2)](https://github.com/user-attachments/assets/8e33bbb7-fc7d-4879-a3e2-83460643e677)
 
 ![newplot (1)](https://github.com/user-attachments/assets/08a49cdf-a829-483b-a760-f48d6e20567c)
 
