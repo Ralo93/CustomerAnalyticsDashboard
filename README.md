@@ -1,6 +1,5 @@
-# voiceLine Task 3
+# voiceLine Task 2
 
-## System Architecture
 ## Overview
 This document describes the architecture of my data processing and visualization system. The system consists of multiple components that work together to process, store, and visualize data from the sales environment.
 
@@ -42,9 +41,8 @@ mindmap
       Neutral
 ```
 
+## Labels Sneak Preview
 
-## Sneak 
-### Labels
 
 ![sfs](https://github.com/user-attachments/assets/aa0e7250-79e2-40fd-bafa-f8ece7dd3ace)
 
@@ -55,7 +53,7 @@ mindmap
 ![bi](https://github.com/user-attachments/assets/81c8c2e8-3ef4-40fc-8951-471ad7d0d62e)
 
 
-### Features
+## Features Sneak Preview
 
 ![pm](https://github.com/user-attachments/assets/3ad617e6-000e-4a5c-b4cd-fd030c0423fa)
 
@@ -64,17 +62,79 @@ mindmap
 
 
 
+## Data Model
 
-# As a CTO, I focus more on non-functional requirements and product strategy.
+Get labels and features. Good enough for the start.
+
+```mermaid
+classDiagram
+    class Sentence {
+      +String id
+      +String external_id
+      +String text
+      +DateTime created_at
+    }
+    
+    class SentenceLabel {
+      +String id
+      +String sentence_id
+      +DateTime created_at
+      +DateTime last_updated
+      +String sales_funnel_stage
+      +Float sales_funnel_confidence
+      +String sentiment
+      +Float sentiment_confidence
+      +String intent
+      +Float intent_confidence
+      +String business_impact
+      +Float business_impact_confidence
+      +Boolean is_sales_funnel_relevant
+      +Float is_sales_funnel_relevant_confidence
+    }
+    
+    class SentenceFeatures {
+      +String id
+      +String sentence_id
+      +DateTime created_at
+      +Integer word_count
+      +Integer char_count
+      +Float avg_word_length
+      +Integer noun_count
+      +Integer verb_count
+      +Integer adj_count
+      +Integer entity_count
+      +Boolean mentions_masterblaster
+      +Integer masterblaster_quantity
+      +Boolean mentions_funpun
+      +Integer funpun_quantity
+      +Boolean mentions_powerpro
+      +Integer powerpro_quantity
+      +LargeBinary sentence_embedding
+      +String embedding_model
+    }
+    
+    %% Enum for label types
+    class LabelType {
+      <<enumeration>>
+      SALES_FUNNEL
+      SENTIMENT
+      INTENT
+      BUSINESS_IMPACT
+    }
+    
+    Sentence "1" -- "1" SentenceLabel : "has"
+    Sentence "1" -- "1" SentenceFeatures : "has"
+```
+
+# As a CTO, I also focus heavily on non-functional requirements and product strategy, mainly:
 
 1. Maintainability
 2. Scalability
 3. Robustness
-4. Test Coverage
-5. Deployment ready architecture
-6. Fast Iteration using Customer Feedback asap
+4. Deployability
+5. Fast Iterations using Customer Feedback and an imperfect MVP, going the lean and agile way.
 
-I need an architecture which is fast, can handle changing requirements, can be scaled and is cheap. I want to iterate quickly to pivot into better product strategies.
+I need an architecture which is fast, can handle changing requirements, can be scaled and is cheap. I want to iterate quickly to pivot into better product strategies if necessary.
 So I came up with the following architecture for an MVP:
 
 - Input: Sentences
@@ -173,15 +233,16 @@ flowchart TD
 
 - User sends a request to the API Gateway
   
-1. The API Gateway forwards the request to the Feature Extractor
-2. Sends raw data to the DB Service
-3. Enqueues a task in the Message Queue
+1. The API Gateway
+   - forwards the request to the Feature Extractor
+   - Sends raw data to the DB Service
+   - Enqueues a task in the Message Queue
+3. DB Service stores the raw data in the database 
 4. Feature Extractor processes the data and stores features in the database
-5. DB Service stores the raw data in the database
-6. Worker pulls tasks from the Message Queue
-7. Worker makes API calls to OpenAI and stores results in the database
-8. Redis caches relevant data from the database
-9. Dashboard retrieves data from Redis to display visualizations
+5. Worker pulls tasks from the Message Queue
+6. Worker makes API calls to OpenAI and stores results in the database
+7. Redis caches relevant data from the database
+8. Dashboard retrieves data from Redis to display visualizations
 
 
 ## TechStack
@@ -196,7 +257,7 @@ flowchart TD
 - Docker
 
 
-## Dashboard
+## Dashboard Sneak Preview
 
 ![relevance](https://github.com/user-attachments/assets/ea6a8e11-ac32-467e-924b-af9b1b120bcd)
 
@@ -216,18 +277,19 @@ flowchart TD
 
 ## Future Enhancements
 
-0. Over time create customer - client specific sales funnels and models
-1. Add service specific databases and db_services
-2. Implement more sophisticated caching strategies
-3. Add real-time processing capabilities
-4. Expand dashboard functionality with additional visualization options
+0. Over time create customer - client specific sales funnels and models (R&D)
+1. Add service specific databases and db_services (scalability)
+2. Implement more sophisticated caching strategies (user experience)
+3. Add real-time processing capabilities (monitoring)
+4. Expand dashboard functionality with additional visualization options (user experience)
 
 # Setup
 
-1. Start a redis server installed and started locally
+1. Start a redis server locally
 2. Have postgre server installed locally
 3. Have rabbitmq installed and running locally
 4. Clone repository
+5. Run ./tests/ingestion.py for populating the database
 
 # Application Startup
 1. Navigate to root of project
