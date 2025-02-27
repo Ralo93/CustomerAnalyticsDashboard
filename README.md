@@ -285,7 +285,7 @@ flowchart TD
 
 # Setup
 
-1. Start a redis server installed and started locally
+1. Start a redis server locally
 2. Have postgre server installed locally
 3. Have rabbitmq installed and running locally
 4. Clone repository
