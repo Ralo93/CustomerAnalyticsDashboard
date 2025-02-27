@@ -154,7 +154,7 @@ flowchart TD
     
     MQ -->|Dequeue Task| Worker[Worker]
     
-    Worker -->|OpenAI API Call| OpenAI[OpenAI Service or Internal Model] 
+    Worker -->|API Call| OpenAI[OpenAI Service or Internal Model] 
     OpenAI -->|Response| Worker
     
     Worker -->|Send Results| DBS
