@@ -135,7 +135,6 @@ class ImpactInformation(BaseModel):
     count: int
 
 
-
 class FeatureUpdate(FeatureBase):
     sentence_embedding: Optional[str] = None  # Base64 encoded string
 
@@ -578,6 +577,7 @@ async def get_general_sentiment_distribution(
             "percentage": r.count / total * 100 if total > 0 else 0
         } for r in results
     ]
+
 @app.get("/analytics/intent-distribution", response_model=List[IntentDistribution])
 async def get_intent_distribution(
     is_sales_funnel_relevant: Optional[bool] = None,
@@ -1167,6 +1167,7 @@ async def get_time_series_trends(
         
         # Calculate sales funnel stage data for this point (only if relevant)
         # For non-relevant sentences, all stage counts are 0
+
         is_relevant = result.is_sales_funnel_relevant
         funnel_stage_trends.append({
             'awareness': 1 if (is_relevant and result.sales_funnel_stage == 'Awareness') else 0,
