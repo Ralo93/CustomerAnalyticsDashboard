@@ -42,10 +42,9 @@ mindmap
 ```
 
 ## Labels Sneak Preview
+![newplot (4)](https://github.com/user-attachments/assets/a4bb441a-6b6a-4338-bf22-dda96adcd06b)
 
-![newplot (3)](https://github.com/user-attachments/assets/4261b402-ef57-477e-8b4b-09d4773d1657)
-
-![newplot (2)](https://github.com/user-attachments/assets/8e33bbb7-fc7d-4879-a3e2-83460643e677)
+![newplot (5)](https://github.com/user-attachments/assets/80dc74b9-27aa-44cf-82a8-d8f18212451b)
 
 ![newplot (1)](https://github.com/user-attachments/assets/08a49cdf-a829-483b-a760-f48d6e20567c)
 
