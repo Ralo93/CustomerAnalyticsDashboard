@@ -41,6 +41,13 @@ mindmap
       Neutral
 ```
 
+## Classification Results
+
+![newplot (7)](https://github.com/user-attachments/assets/f880d25e-8601-4c19-ae13-691c25fced54)
+
+![newplot (6)](https://github.com/user-attachments/assets/e25ace11-97fe-43cf-b743-dde4322cf801)
+
+
 ## Labels Sneak Preview
 ![newplot (4)](https://github.com/user-attachments/assets/a4bb441a-6b6a-4338-bf22-dda96adcd06b)
 
