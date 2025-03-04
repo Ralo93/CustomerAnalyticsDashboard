@@ -149,8 +149,11 @@ classDiagram
     Sentence "1" -- "1" SentenceLabel : "has"
     Sentence "1" -- "1" SentenceFeatures : "has"
 ```
+## Functional Requirements
 
-#I also want to focus heavily on non-functional requirements and product strategy, mainly:
+
+
+# I also want to focus heavily on non-functional requirements and product strategy, mainly:
 
 1. Maintainability
 2. Scalability
