@@ -287,120 +287,39 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    %% Title and Description (as comment since titles aren't directly supported)
-    %% ML System Architecture with Fault Tolerance
+    %% ML System with Go+Python Integration
     
-    %% User Interaction Layer
-    Users([Load Balancer]) -->|Distributed Requests| APIGateway[API Gateway Cluster]
+    %% User Interaction Layer - Go
+    Users([Load Balancer: Nginx]) -->|Distributed Requests| APIGateway[API Gateway: Traefik]
     
-    %% API Gateway Layer
-    APIGateway -->|Rate Limited| AuthService[Auth & Validation Service]
-    AuthService -->|Validated| RequestRouter[Request Router]
+    %% API Gateway Layer - Go
+    APIGateway -->|Rate Limited| AuthService[Auth Service: Go+JWT]
+    AuthService -->|Validated| RequestRouter[Request Router: Go Fiber/Chi]
     
-    %% Request Routing and Distribution
-    RequestRouter -->|Distributed Tasks| TaskOrchestrator[Distributed Task Orchestrator]
+    %% Request Routing - Go
+    RequestRouter -->|Distributed Tasks| TaskOrchestrator[Task Orchestrator: Go+NATS]
     
-    %% Feature Extraction Microservices
-    TaskOrchestrator -->|Parallel Processing| FeatureExtractorCluster[Feature Extractor Cluster]
+    %% Feature Extraction - Python
+    TaskOrchestrator -->|Via gRPC| FeatureExtractorCluster[Feature Extraction: Python]
     
-    %% Queueing and Message Routing
-    FeatureExtractorCluster -.->|Reliable Messaging| KafkaCluster[(Kafka Cluster)]
-    KafkaCluster -->|Partitioned Streams| WorkerCluster[Elastic Worker Cluster]
+    %% Messaging - Go
+    FeatureExtractorCluster -.->|Reliable Messaging| KafkaCluster[(Message Queue: NATS/Kafka)]
+    KafkaCluster -->|Partitioned Streams| WorkerCluster[Workers: Go Workers]
     
-    %% Model Inference Layer
-    WorkerCluster -->|Inference Request| ModelRouter[ML Model Router]
-    ModelRouter -->|Load Balanced| ModelServices[Model Services]
+    %% Model Inference - Python
+    WorkerCluster -->|RPC Calls| ModelRouter[Model Router: Python FastAPI]
+    ModelRouter -->|Load Balanced| ModelServices[Model Services: Python]
     
-    %% Model Services Details
-    ModelServices -->|OpenAI API| OpenAI([OpenAI])
-    ModelServices -->|Internal Models| InternalModels([Internal Models])
-    ModelServices -->|Fallback Strategy| FallbackModels([Fallback Models])
+    %% Storage - Language Agnostic
+    ModelServices -->|Store Results| DatabaseCluster[(Database: PostgreSQL)]
+    DatabaseCluster -->|Replicated Data| RedisCluster[(Cache: Redis)]
     
-    %% Data Persistence and Caching
-    ModelServices -->|Store Results| DatabaseCluster[(Database Cluster)]
-    DatabaseCluster -->|Replicated Data| RedisCluster[(Redis Cluster)]
+    %% Dashboard - Go Frontend, Python Backend
+    RedisCluster -->|Cached Data| DashboardService[Dashboard Backend: Python Flask]
+    DashboardService -->|API Calls| WebSocketCluster[WebSockets: Go]
     
-    %% Monitoring and Observability
-    DatabaseCluster -.->|Metrics & Logs| Prometheus[Prometheus Monitoring]
-    Prometheus -->|Alerts| AlertManager[Alert Manager]
-    
-    %% Dashboard and Visualization
-    RedisCluster -->|Cached Data| DashboardService[Dashboard Microservice]
-    DashboardService -->|Streaming Updates| WebSocketCluster[WebSocket Cluster]
-    
-    %% System Metrics
-    subgraph SystemMetrics[System Metrics]
-        Latency[Latency: 150-250ms]
-        Throughput[Throughput: 1000 req/sec]
-        Availability[Availability: 99.99%]
-        RecoveryTime[Recovery Time: <3min]
-    end
-    
-    %% Fault Tolerance Components
-    subgraph FaultTolerance[Fault Tolerance]
-        CircuitBreaker[Circuit Breaker]
-        RetryMechanism[Retry Mechanism]
-        FallbackPolicies[Fallback Policies]
-        HealthChecks[Health Monitoring]
-        GracefulDegradation[Graceful Degradation]
-    end
-    
-    %% Layer Labels as subgraphs
-    subgraph UserLayer[User Interaction Layer]
-        Users
-    end
-    
-    subgraph APILayer[API Gateway Layer]
-        APIGateway
-        AuthService
-        RequestRouter
-    end
-    
-    subgraph ProcessingLayer[Processing Layer]
-        TaskOrchestrator
-        FeatureExtractorCluster
-    end
-    
-    subgraph MessagingLayer[Messaging Layer]
-        KafkaCluster
-    end
-    
-    subgraph InferenceLayer[Inference Layer]
-        WorkerCluster
-        ModelRouter
-        ModelServices
-        OpenAI
-        InternalModels
-        FallbackModels
-    end
-    
-    subgraph StorageLayer[Storage Layer]
-        DatabaseCluster
-        RedisCluster
-    end
-    
-    subgraph MonitoringLayer[Monitoring Layer]
-        Prometheus
-        AlertManager
-        DashboardService
-        WebSocketCluster
-    end
-    
-    %% Styling
-    classDef default fill:#f9f9f9,stroke:#999,stroke-width:1px,color:#333
-    classDef service fill:#0366d6,stroke:#0366d6,color:white
-    classDef storage fill:#28a745,stroke:#28a745,color:white
-    classDef external fill:#6f42c1,stroke:#6f42c1,color:white
-    classDef user fill:#d73a49,stroke:#d73a49,color:white
-    classDef monitoring fill:#f66a0a,stroke:#f66a0a,color:white
-    classDef metrics fill:#f0f7ff,stroke:#999,color:#333
-    
-    class APIGateway,AuthService,RequestRouter,TaskOrchestrator,FeatureExtractorCluster,WorkerCluster,ModelRouter,DashboardService,WebSocketCluster service
-    class KafkaCluster,DatabaseCluster,RedisCluster storage
-    class ModelServices,OpenAI,InternalModels,FallbackModels external
-    class Users user
-    class Prometheus,AlertManager monitoring
-    class Latency,Throughput,Availability,RecoveryTime metrics
+    class APIGateway,AuthService,RequestRouter,TaskOrchestrator,WorkerCluster,WebSocketCluster fill:#00ADD8,stroke:#00ADD8,color:white
+    class FeatureExtractorCluster,ModelRouter,ModelServices,DashboardService fill:#3776AB,stroke:#3776AB,color:white
 ```
 
 ## Components
