@@ -224,7 +224,7 @@ flowchart TD
 - Responsible for storing unprocessed data in the database
 - Handles database connections and transactions
 
-### Message Queue
+### Message Queue (Service)
 
 - Maintains a queue of tasks to be processed asynchronously
 - Provides reliable task delivery to the Worker
