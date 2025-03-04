@@ -1,7 +1,30 @@
-# How to create a customer conversation analytics product as a CTO
+# Customer Conversation Analytics
 
 ## Overview
-This document describes the approach and architecture of my data processing and visualization analytics system. The system consists of multiple components that work together to process, store, and visualize data from customer conversations in a sales environment.
+This document describes the approach and architecture of my data processing and visualization analytics system. The system consists of multiple components that work together to process, store, and visualize data from customer conversations - these could include feedback, general notes, or sales funnel relevant information.
+
+Imagine having data like this:
+```plaintext
+[
+  {"id": 0, "sentence": "Unfortunately, we have to decline the FunPun quotation as we've secured a better offer."},
+  {"id": 1, "sentence": "We are planning to order 500 units of FunPun for our upcoming initiative."},
+  {"id": 2, "sentence": "Could you provide a quotation for the FunPun solution?"},
+  {"id": 3, "sentence": "Just a heads-up, Alex is no longer our key account manager."},
+  {"id": 4, "sentence": "I'm afraid we can't proceed with the FunPun quotation as it's above our budget."},
+  {"id": 5, "sentence": "I'll be presenting our latest innovations at the European Sales Summit in Brussels next month."},
+  {"id": 6, "sentence": "We're truly impressed by the level of customer support."},
+  {"id": 7, "sentence": "We're extremely pleased with how the implementation process has gone."},
+  {"id": 8, "sentence": "Your support team has exceeded our expectations."},
+  {"id": 9, "sentence": "Curious about the pricing of the MasterBlaster solution."},
+  {"id": 10, "sentence": "We're highly satisfied with the responsiveness of your support team."},
+  {"id": 11, "sentence": "The new online ordering platform should go live by the end of Q3, replacing all paper-based processes.},
+  {"id": 12, "sentence": "Can you send a quote for the PowerPro solution?"},
+  {"id": 13, "sentence": "The training sessions have been quite effective for our team."},
+  {"id": 14, "sentence": "We're very impressed with the impact of the training sessions."}
+]
+
+```
+
 
 ## Classification Targets
 
