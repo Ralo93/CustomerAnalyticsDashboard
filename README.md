@@ -206,8 +206,12 @@ flowchart TD
     class OpenAI external
     class User,Dashboard user
 ```
+
 ```mermaid
 flowchart TD
+    %% Title and Description
+    title[ML System Architecture with Fault Tolerance]
+    
     %% User Interaction Layer
     Users([Load Balancer]) -->|Distributed Requests| APIGateway[API Gateway Cluster]
     
@@ -222,50 +226,105 @@ flowchart TD
     TaskOrchestrator -->|Parallel Processing| FeatureExtractorCluster[Feature Extractor Cluster]
     
     %% Queueing and Message Routing
-    FeatureExtractorCluster -->|Reliable Messaging| KafkaCluster[(Kafka Cluster)]
+    FeatureExtractorCluster -.->|Reliable Messaging| KafkaCluster[(Kafka Cluster)]
     KafkaCluster -->|Partitioned Streams| WorkerCluster[Elastic Worker Cluster]
     
     %% Model Inference Layer
     WorkerCluster -->|Inference Request| ModelRouter[ML Model Router]
-    ModelRouter -->|Load Balanced| ModelServices[
-        Model Services
-        - OpenAI
-        - Internal Models
-        - Fallback Models
-    ]
+    ModelRouter -->|Load Balanced| ModelServices[Model Services]
+    
+    %% Model Services Details
+    ModelServices -->|OpenAI API| OpenAI([OpenAI])
+    ModelServices -->|Internal Models| InternalModels([Internal Models])
+    ModelServices -->|Fallback Strategy| FallbackModels([Fallback Models])
     
     %% Data Persistence and Caching
-    ModelServices -->|Store Results| DatabaseCluster[Database Cluster]
+    ModelServices -->|Store Results| DatabaseCluster[(Database Cluster)]
     DatabaseCluster -->|Replicated Data| RedisCluster[(Redis Cluster)]
     
     %% Monitoring and Observability
-    DatabaseCluster -->|Metrics & Logs| Prometheus[Prometheus Monitoring]
+    DatabaseCluster -.->|Metrics & Logs| Prometheus[Prometheus Monitoring]
     Prometheus -->|Alerts| AlertManager[Alert Manager]
     
     %% Dashboard and Visualization
     RedisCluster -->|Cached Data| DashboardService[Dashboard Microservice]
     DashboardService -->|Streaming Updates| WebSocketCluster[WebSocket Cluster]
     
+    %% System Metrics
+    subgraph SystemMetrics[System Metrics]
+        Latency[Latency: 150-250ms]
+        Throughput[Throughput: 1000 req/sec]
+        Availability[Availability: 99.99%]
+        RecoveryTime[Recovery Time: <3min]
+    end
+    
     %% Fault Tolerance Components
-    subgraph Fault Tolerance
+    subgraph FaultTolerance[Fault Tolerance]
         CircuitBreaker[Circuit Breaker]
         RetryMechanism[Retry Mechanism]
         FallbackPolicies[Fallback Policies]
+        HealthChecks[Health Monitoring]
+        GracefulDegradation[Graceful Degradation]
+    end
+    
+    %% Layer Labels
+    subgraph UserLayer[User Interaction Layer]
+        Users
+    end
+    
+    subgraph APILayer[API Gateway Layer]
+        APIGateway
+        AuthService
+        RequestRouter
+    end
+    
+    subgraph ProcessingLayer[Processing Layer]
+        TaskOrchestrator
+        FeatureExtractorCluster
+    end
+    
+    subgraph MessagingLayer[Messaging Layer]
+        KafkaCluster
+    end
+    
+    subgraph InferenceLayer[Inference Layer]
+        WorkerCluster
+        ModelRouter
+        ModelServices
+        OpenAI
+        InternalModels
+        FallbackModels
+    end
+    
+    subgraph StorageLayer[Storage Layer]
+        DatabaseCluster
+        RedisCluster
+    end
+    
+    subgraph MonitoringLayer[Monitoring Layer]
+        Prometheus
+        AlertManager
+        DashboardService
+        WebSocketCluster
     end
     
     %% Styling
-    classDef default fill:#f9f9f9,stroke:#999,stroke-width:1px,color:#333
-    classDef service fill:#0366d6,stroke:#0366d6,color:white
-    classDef storage fill:#28a745,stroke:#28a745,color:white
-    classDef external fill:#6f42c1,stroke:#6f42c1,color:white
-    classDef user fill:#d73a49,stroke:#d73a49,color:white
-    classDef monitoring fill:#f66a0a,stroke:#f66a0a,color:white
+    classDef default fill:#f9f9f9,stroke:#999,stroke-width:1px,color:#333,font-size:14px
+    classDef service fill:#0366d6,stroke:#0366d6,color:white,font-weight:bold
+    classDef storage fill:#28a745,stroke:#28a745,color:white,font-weight:bold
+    classDef external fill:#6f42c1,stroke:#6f42c1,color:white,font-weight:bold
+    classDef user fill:#d73a49,stroke:#d73a49,color:white,font-weight:bold
+    classDef monitoring fill:#f66a0a,stroke:#f66a0a,color:white,font-weight:bold
+    classDef metrics fill:#f0f7ff,stroke:#999,color:#333
+    classDef subgraph fill:#f5f5f5,stroke:#ddd,color:#333,font-weight:bold
     
-    class APIGateway,AuthService,RequestRouter,FeatureExtractorCluster,WorkerCluster,ModelRouter,DashboardService service
+    class APIGateway,AuthService,RequestRouter,TaskOrchestrator,FeatureExtractorCluster,WorkerCluster,ModelRouter,DashboardService,WebSocketCluster service
     class KafkaCluster,DatabaseCluster,RedisCluster storage
-    class ModelServices external
+    class ModelServices,OpenAI,InternalModels,FallbackModels external
     class Users user
     class Prometheus,AlertManager monitoring
+    class Latency,Throughput,Availability,RecoveryTime metrics
+    class UserLayer,APILayer,ProcessingLayer,MessagingLayer,InferenceLayer,StorageLayer,MonitoringLayer,SystemMetrics,FaultTolerance subgraph
 ```
 
 ## Components
