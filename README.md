@@ -165,6 +165,8 @@ So I came up with the following architecture for an MVP:
 - Output: Interactive Dashboard 
 
 ## Architecture Diagram
+
+```mermaid
 flowchart TD
     User([User]) -->|Request| API[API Gateway]
     
@@ -200,7 +202,7 @@ flowchart TD
     class DB,Redis,MQ storage
     class OpenAI external
     class User,Dashboard user
-
+```
 ## Components
 
 ### API Gateway
