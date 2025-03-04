@@ -88,7 +88,7 @@ mindmap
 
 ## Data Model
 
-Get labels and features. Good enough for the start.
+Get labels and features for the sentences. The focus on labels was already discussed, the choice of features was to get a simple set to start with, but generally these features can be extended later anyway, e.g. by n-grams, the presence of specific characters like questionmarks or readability metrics, which we will do later when we develop our own classifier.
 
 ```mermaid
 classDiagram
