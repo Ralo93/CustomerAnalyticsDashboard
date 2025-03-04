@@ -165,14 +165,14 @@ So I came up with the following architecture for an MVP:
 - Output: Interactive Dashboard 
 
 ## Architecture Diagram
-
-```mermaid
 flowchart TD
     User([User]) -->|Request| API[API Gateway]
     
     API -->|Forward Request| FE[Feature Extractor]
-    API -->|Enqueue Task| MQ[(Message Queue)]
+    API -->|Send Sentence| QS[Queue Service]
     API -->|Store Raw Data| DBS[DB Service]
+    
+    QS -->|Enqueue Task| MQ[(Message Queue)]
     
     FE -->|Send Extracted Features| DBS
     
@@ -196,11 +196,10 @@ flowchart TD
     classDef external fill:#6f42c1,stroke:#6f42c1,color:white
     classDef user fill:#d73a49,stroke:#d73a49,color:white
     
-    class API,FE,Worker,DBS service
+    class API,FE,Worker,DBS,QS service
     class DB,Redis,MQ storage
     class OpenAI external
     class User,Dashboard user
-```
 
 ## Components
 
