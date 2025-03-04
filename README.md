@@ -206,6 +206,68 @@ flowchart TD
     class OpenAI external
     class User,Dashboard user
 ```
+```mermaid
+flowchart TD
+    %% User Interaction Layer
+    Users([Load Balancer]) -->|Distributed Requests| APIGateway[API Gateway Cluster]
+    
+    %% API Gateway Layer
+    APIGateway -->|Rate Limited| AuthService[Auth & Validation Service]
+    AuthService -->|Validated| RequestRouter[Request Router]
+    
+    %% Request Routing and Distribution
+    RequestRouter -->|Distributed Tasks| TaskOrchestrator[Distributed Task Orchestrator]
+    
+    %% Feature Extraction Microservices
+    TaskOrchestrator -->|Parallel Processing| FeatureExtractorCluster[Feature Extractor Cluster]
+    
+    %% Queueing and Message Routing
+    FeatureExtractorCluster -->|Reliable Messaging| KafkaCluster[(Kafka Cluster)]
+    KafkaCluster -->|Partitioned Streams| WorkerCluster[Elastic Worker Cluster]
+    
+    %% Model Inference Layer
+    WorkerCluster -->|Inference Request| ModelRouter[ML Model Router]
+    ModelRouter -->|Load Balanced| ModelServices[
+        Model Services
+        - OpenAI
+        - Internal Models
+        - Fallback Models
+    ]
+    
+    %% Data Persistence and Caching
+    ModelServices -->|Store Results| DatabaseCluster[Database Cluster]
+    DatabaseCluster -->|Replicated Data| RedisCluster[(Redis Cluster)]
+    
+    %% Monitoring and Observability
+    DatabaseCluster -->|Metrics & Logs| Prometheus[Prometheus Monitoring]
+    Prometheus -->|Alerts| AlertManager[Alert Manager]
+    
+    %% Dashboard and Visualization
+    RedisCluster -->|Cached Data| DashboardService[Dashboard Microservice]
+    DashboardService -->|Streaming Updates| WebSocketCluster[WebSocket Cluster]
+    
+    %% Fault Tolerance Components
+    subgraph Fault Tolerance
+        CircuitBreaker[Circuit Breaker]
+        RetryMechanism[Retry Mechanism]
+        FallbackPolicies[Fallback Policies]
+    end
+    
+    %% Styling
+    classDef default fill:#f9f9f9,stroke:#999,stroke-width:1px,color:#333
+    classDef service fill:#0366d6,stroke:#0366d6,color:white
+    classDef storage fill:#28a745,stroke:#28a745,color:white
+    classDef external fill:#6f42c1,stroke:#6f42c1,color:white
+    classDef user fill:#d73a49,stroke:#d73a49,color:white
+    classDef monitoring fill:#f66a0a,stroke:#f66a0a,color:white
+    
+    class APIGateway,AuthService,RequestRouter,FeatureExtractorCluster,WorkerCluster,ModelRouter,DashboardService service
+    class KafkaCluster,DatabaseCluster,RedisCluster storage
+    class ModelServices external
+    class Users user
+    class Prometheus,AlertManager monitoring
+```
+
 ## Components
 
 ### API Gateway
