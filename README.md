@@ -209,8 +209,8 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    %% Title and Description
-    title[ML System Architecture with Fault Tolerance]
+    %% Title and Description (as comment since titles aren't directly supported)
+    %% ML System Architecture with Fault Tolerance
     
     %% User Interaction Layer
     Users([Load Balancer]) -->|Distributed Requests| APIGateway[API Gateway Cluster]
@@ -267,7 +267,7 @@ flowchart TD
         GracefulDegradation[Graceful Degradation]
     end
     
-    %% Layer Labels
+    %% Layer Labels as subgraphs
     subgraph UserLayer[User Interaction Layer]
         Users
     end
@@ -309,14 +309,13 @@ flowchart TD
     end
     
     %% Styling
-    classDef default fill:#f9f9f9,stroke:#999,stroke-width:1px,color:#333,font-size:14px
-    classDef service fill:#0366d6,stroke:#0366d6,color:white,font-weight:bold
-    classDef storage fill:#28a745,stroke:#28a745,color:white,font-weight:bold
-    classDef external fill:#6f42c1,stroke:#6f42c1,color:white,font-weight:bold
-    classDef user fill:#d73a49,stroke:#d73a49,color:white,font-weight:bold
-    classDef monitoring fill:#f66a0a,stroke:#f66a0a,color:white,font-weight:bold
+    classDef default fill:#f9f9f9,stroke:#999,stroke-width:1px,color:#333
+    classDef service fill:#0366d6,stroke:#0366d6,color:white
+    classDef storage fill:#28a745,stroke:#28a745,color:white
+    classDef external fill:#6f42c1,stroke:#6f42c1,color:white
+    classDef user fill:#d73a49,stroke:#d73a49,color:white
+    classDef monitoring fill:#f66a0a,stroke:#f66a0a,color:white
     classDef metrics fill:#f0f7ff,stroke:#999,color:#333
-    classDef subgraph fill:#f5f5f5,stroke:#ddd,color:#333,font-weight:bold
     
     class APIGateway,AuthService,RequestRouter,TaskOrchestrator,FeatureExtractorCluster,WorkerCluster,ModelRouter,DashboardService,WebSocketCluster service
     class KafkaCluster,DatabaseCluster,RedisCluster storage
@@ -324,7 +323,6 @@ flowchart TD
     class Users user
     class Prometheus,AlertManager monitoring
     class Latency,Throughput,Availability,RecoveryTime metrics
-    class UserLayer,APILayer,ProcessingLayer,MessagingLayer,InferenceLayer,StorageLayer,MonitoringLayer,SystemMetrics,FaultTolerance subgraph
 ```
 
 ## Components
