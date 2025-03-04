@@ -150,7 +150,7 @@ classDiagram
     Sentence "1" -- "1" SentenceFeatures : "has"
 ```
 
-# As a CTO, I also focus heavily on non-functional requirements and product strategy, mainly:
+#I also want to focus heavily on non-functional requirements and product strategy, mainly:
 
 1. Maintainability
 2. Scalability
