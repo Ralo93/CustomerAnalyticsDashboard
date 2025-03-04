@@ -285,42 +285,6 @@ flowchart TD
 ```
 
 
-```mermaid
-flowchart TD
-    %% ML System with Go+Python Integration
-    
-    %% User Interaction Layer - Go
-    Users([Load Balancer: Nginx]) -->|Distributed Requests| APIGateway[API Gateway: Traefik]
-    
-    %% API Gateway Layer - Go
-    APIGateway -->|Rate Limited| AuthService[Auth Service: Go+JWT]
-    AuthService -->|Validated| RequestRouter[Request Router: Go Fiber/Chi]
-    
-    %% Request Routing - Go
-    RequestRouter -->|Distributed Tasks| TaskOrchestrator[Task Orchestrator: Go+NATS]
-    
-    %% Feature Extraction - Python
-    TaskOrchestrator -->|Via gRPC| FeatureExtractorCluster[Feature Extraction: Python]
-    
-    %% Messaging - Go
-    FeatureExtractorCluster -.->|Reliable Messaging| KafkaCluster[(Message Queue: NATS/Kafka)]
-    KafkaCluster -->|Partitioned Streams| WorkerCluster[Workers: Go Workers]
-    
-    %% Model Inference - Python
-    WorkerCluster -->|RPC Calls| ModelRouter[Model Router: Python FastAPI]
-    ModelRouter -->|Load Balanced| ModelServices[Model Services: Python]
-    
-    %% Storage - Language Agnostic
-    ModelServices -->|Store Results| DatabaseCluster[(Database: PostgreSQL)]
-    DatabaseCluster -->|Replicated Data| RedisCluster[(Cache: Redis)]
-    
-    %% Dashboard - Go Frontend, Python Backend
-    RedisCluster -->|Cached Data| DashboardService[Dashboard Backend: Python Flask]
-    DashboardService -->|API Calls| WebSocketCluster[WebSockets: Go]
-    
-    class APIGateway,AuthService,RequestRouter,TaskOrchestrator,WorkerCluster,WebSocketCluster fill:#00ADD8,stroke:#00ADD8,color:white
-    class FeatureExtractorCluster,ModelRouter,ModelServices,DashboardService fill:#3776AB,stroke:#3776AB,color:white
-```
 
 ## Components
 
