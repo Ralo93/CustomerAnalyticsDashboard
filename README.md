@@ -292,8 +292,13 @@ flowchart TD
 ## Dashboard Sneak Preview
 
 ![relevance](https://github.com/user-attachments/assets/ea6a8e11-ac32-467e-924b-af9b1b120bcd)
+![HighImpact](https://github.com/user-attachments/assets/db63fa57-82b9-4505-abaf-1d0e4852a9cd)
 
 ![funnel](https://github.com/user-attachments/assets/3af951fe-4d9d-4dbe-b5ea-04ef8eb71547)
+![InfoFeedback](https://github.com/user-attachments/assets/9be29ffb-9fba-4a5f-b811-5b35815b4501)
+![Intent](https://github.com/user-attachments/assets/99d27ea4-98d9-4f62-8d8d-81efe2f6d183)
+![sentiment](https://github.com/user-attachments/assets/9f216e97-81c8-4597-82c9-7fe153c81bd0)
+![SentimentImpact](https://github.com/user-attachments/assets/8e7f4c75-9804-42c8-a722-bd44f289e3b0)
 
 ![ProductMentions](https://github.com/user-attachments/assets/482884b8-06e5-4d55-a5d3-55ac1e29f457)
 
