@@ -266,6 +266,7 @@ flowchart TD
 - Nginx
 - Poetry
 - Streamlit
+- OpenAI API
 - PostgreSQL
 - RabbitMQ
 - RESTfulAPI
