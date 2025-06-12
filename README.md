@@ -7,7 +7,7 @@
   - [Features Sneak Preview](#features-sneak-preview)
   - [Classification Results](#classification-results)
   - [Data Model](#data-model)
-  - [Functional Requirements](#functional-requirements)
+  - [Non-Functional Requirements](#functional-requirements)
   - [Architecture Diagram](#architecture-diagram)
   - [Components](#components)
     - [API Gateway](#api-gateway)
@@ -178,7 +178,7 @@ classDiagram
     Sentence "1" -- "1" SentenceLabel : "has"
     Sentence "1" -- "1" SentenceFeatures : "has"
 ```
-## Functional Requirements
+## Non-Functional Requirements
 
 
 
