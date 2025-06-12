@@ -1,3 +1,32 @@
+## Table of Contents
+
+- [Customer Conversation Analytics](#customer-conversation-analytics)
+  - [Overview](#overview)
+  - [Classification Targets](#classification-targets)
+  - [Labels Sneak Preview](#labels-sneak-preview)
+  - [Features Sneak Preview](#features-sneak-preview)
+  - [Classification Results](#classification-results)
+  - [Data Model](#data-model)
+  - [Functional Requirements](#functional-requirements)
+  - [Architecture Diagram](#architecture-diagram)
+  - [Components](#components)
+    - [API Gateway](#api-gateway)
+    - [Feature Extractor](#feature-extractor)
+    - [DB Service](#db-service)
+    - [Message Queue (Service)](#message-queue-service)
+    - [Worker](#worker)
+    - [Database](#database)
+    - [Redis Cache](#redis-cache)
+    - [Dashboard](#dashboard)
+  - [Tech Stack](#tech-stack)
+  - [Data Flow](#data-flow)
+  - [Dashboard Sneak Preview](#dashboard-sneak-preview)
+  - [Deployment Considerations](#deployment-considerations)
+  - [Future Enhancements](#future-enhancements)
+- [Setup](#setup)
+- [Application Startup](#application-startup)
+
+
 # Customer Conversation Analytics
 
 ## Overview
