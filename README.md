@@ -7,7 +7,7 @@
   - [Features Sneak Preview](#features-sneak-preview)
   - [Classification Results](#classification-results)
   - [Data Model](#data-model)
-  - [Non-Functional Requirements](#functional-requirements)
+  - [Non-Functional Requirements](#non-functional-requirements)
   - [Architecture Diagram](#architecture-diagram)
   - [Components](#components)
     - [API Gateway](#api-gateway)
